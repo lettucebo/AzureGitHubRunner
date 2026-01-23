@@ -87,13 +87,13 @@ runcmd:
   - systemctl start docker
   - usermod -aG docker github-runner
 
-  # Install .NET SDK
+  # Install .NET SDK (versions 8.0 and 10.0)
   - wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb
   - dpkg -i /tmp/packages-microsoft-prod.deb
   - rm /tmp/packages-microsoft-prod.deb
   - apt-get update
-  - apt-get install -y dotnet-sdk-8.0
-  - dotnet --version
+  - apt-get install -y dotnet-sdk-8.0 dotnet-sdk-9.0
+  - dotnet --list-sdks
 
   # Install NVM and Node.js versions as github-runner user
   - su - github-runner -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash'
@@ -138,7 +138,7 @@ final_message: |
 
   Installed Software:
   - Docker: $(docker --version)
-  - .NET SDK: $(dotnet --version)
+  - .NET SDK: $(dotnet --list-sdks)
   - Node.js versions: 20, 22, 24 (via nvm)
 
   GitHub Runners:
