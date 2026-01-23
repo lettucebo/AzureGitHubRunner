@@ -1,0 +1,145 @@
+# ========================================
+# Azure Configuration
+# ========================================
+
+# Azure 區域選擇指南（台灣用戶）
+# 
+# 🇹🇼 從台灣連線的最佳選擇：
+# 1. eastasia (香港)        - 延遲 ~25ms, Spot 穩定性極佳 ⭐⭐⭐⭐⭐ 推薦首選
+# 2. southeastasia (新加坡) - 延遲 ~50ms, Spot 穩定性極佳 ⭐⭐⭐⭐⭐
+# 3. japaneast (東京)       - 延遲 ~45ms, Spot 穩定性佳   ⭐⭐⭐⭐
+# 4. koreacentral (首爾)    - 延遲 ~40ms, Spot 穩定性佳   ⭐⭐⭐⭐
+#
+# 💡 建議：使用 eastasia (香港) - 延遲最低且 Spot VM 供應充足
+location = "eastasia"
+
+# Resource Group 名稱
+resource_group_name = "rg-github-runners"
+
+# 資源名稱前綴（將用於所有資源名稱）
+prefix = "gh-runner"
+
+# ========================================
+# Virtual Machine Configuration
+# ========================================
+
+# VM 規格大小
+# 建議選項:
+#   - Standard_D4s_v5 (4 vCPU, 16GB RAM) - 適合 2-3 個 runners
+#   - Standard_D8s_v5 (8 vCPU, 32GB RAM) - 適合 4-6 個 runners
+#   - Standard_D16s_v5 (16 vCPU, 64GB RAM) - 適合 8-10 個 runners
+# 
+# Spot VM 建議選擇較新世代且供應充足的規格，例如：
+#   - Dsv5 系列（最新）
+#   - Dasv5 系列（AMD，通常更便宜）
+vm_size = "Standard_D4s_v5"
+
+# ========================================
+# Spot VM Configuration（節省成本）
+# ========================================
+
+# 啟用 Spot VM（可節省 70-90% 成本）
+# 注意：Spot VM 可能在 Azure 需要容量時被回收
+enable_spot_vm = true
+
+# Spot VM 回收策略
+# - "Deallocate": 回收時停止 VM，保留配置（推薦）
+#                 優點：可以快速重新啟動，保留磁碟資料
+#                 缺點：需支付磁碟儲存費用
+# - "Delete": 回收時完全刪除 VM
+#             優點：不收取任何費用
+#             缺點：需要重新部署，資料會遺失
+spot_eviction_policy = "Deallocate"
+
+# Spot VM 最高出價（USD/小時）
+# - -1: 願意支付最高到隨需價格（強烈建議！大幅降低被回收風險）
+# - 自訂價格: 例如 0.05（每小時 $0.05 USD）
+# 
+# 💡 建議使用 -1 的原因：
+#   1. Spot 價格通常遠低於隨需價格（70-90% 折扣）
+#   2. 即使設定為隨需價格，實際付費仍是當前 Spot 價格
+#   3. 大幅降低因價格而被回收的風險
+#   4. 只有容量不足時才會被回收（而非價格因素）
+spot_max_bid_price = -1
+
+# OS 磁碟類型
+# 選項: Standard_LRS, StandardSSD_LRS, Premium_LRS
+os_disk_type = "Premium_LRS"
+
+# OS 磁碟大小 (GB)
+os_disk_size_gb = 128
+
+# VM 管理員帳號名稱
+admin_username = "azureuser"
+
+# SSH 公鑰（請替換為您的 SSH 公鑰）
+# 產生 SSH 金鑰: ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+# 讀取公鑰: cat ~/.ssh/id_rsa.pub
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... your-public-key-here"
+
+# 允許 SSH 連線的來源 IP 範圍
+# 使用 "*" 允許所有來源（不建議用於生產環境）
+# 使用 CIDR 格式限制特定範圍，例如: "1.2.3.4/32" 或 "10.0.0.0/8"
+ssh_source_address_prefix = "*"
+
+# ========================================
+# GitHub Configuration
+# ========================================
+
+# GitHub Personal Access Token
+# 需要以下權限:
+#   - repo (Full control of private repositories)
+#   - admin:org > read:org (Read org and team membership)
+# 
+# 產生 Token: https://github.com/settings/tokens/new
+# 注意: Token 僅會顯示一次，請妥善保存
+github_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# GitHub Repository 或 Organization URL
+# 
+# 選項 1: Repository-level（單一專案）
+#   格式: https://github.com/owner/repository
+#   例如: https://github.com/microsoft/vscode
+#   適用: 個人帳號或組織內的單一 repo
+#   Runner 只服務這一個 repository
+#
+# 選項 2: Organization-level（多專案，需要組織帳號）
+#   格式: https://github.com/organization-name
+#   例如: https://github.com/microsoft
+#   適用: GitHub 組織帳號
+#   Runner 可服務組織內的所有 repositories
+#   注意: 個人帳號無法使用 organization-level
+#
+# 💡 建議:
+#   - 個人開發: 使用 repository-level
+#   - 小團隊/多專案: 先用 repository-level，之後成立組織時再改
+#   - 組織帳號: 使用 organization-level（一台 VM 服務所有專案）
+github_repo_url = "https://github.com/your-username/your-repository"
+
+# ========================================
+# GitHub Runners Configuration
+# ========================================
+
+# 要建立的 Runner 數量 (1-10)
+# 建議根據 VM 規格選擇:
+#   - Standard_D4s_v5: 2-3 個 runners
+#   - Standard_D8s_v5: 4-6 個 runners
+#   - Standard_D16s_v5: 8-10 個 runners
+runner_count = 3
+
+# Runner 標籤（逗號分隔）
+# 這些標籤用於 GitHub Actions workflow 的 runs-on 選擇
+# 預設標籤會自動包含: self-hosted, linux, x64, azure, runner-N
+runner_labels = "self-hosted,linux,x64,azure"
+
+# ========================================
+# Resource Tags
+# ========================================
+
+tags = {
+  Environment = "Production"
+  ManagedBy   = "Terraform"
+  Purpose     = "GitHub-Runners"
+  Project     = "CI-CD-Infrastructure"
+  Owner       = "DevOps-Team"
+}

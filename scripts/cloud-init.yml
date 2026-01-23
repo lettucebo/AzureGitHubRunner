@@ -1,0 +1,154 @@
+#cloud-config
+
+# Azure VM cloud-init configuration for GitHub Self-hosted Runners
+# This script will be executed during VM first boot
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - wget
+  - git
+  - jq
+  - build-essential
+  - libssl-dev
+  - libffi-dev
+  - python3
+  - python3-pip
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - unzip
+
+groups:
+  - docker
+
+users:
+  - name: github-runner
+    groups: docker, sudo
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+
+write_files:
+  - path: /tmp/setup-runners.sh
+    permissions: "0755"
+    encoding: b64
+    content: ${setup_script}
+
+  - path: /etc/systemd/system/actions-runner@.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=GitHub Actions Runner %i
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=github-runner
+      WorkingDirectory=/opt/actions-runner-%i
+      ExecStart=/opt/actions-runner-%i/run.sh
+      Restart=always
+      RestartSec=10
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=actions-runner-%i
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/profile.d/github-runner-env.sh
+    permissions: "0644"
+    content: |
+      # GitHub Runner environment variables
+      export RUNNER_ALLOW_RUNASROOT=0
+      export DOTNET_CLI_TELEMETRY_OPTOUT=1
+      export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+
+  - path: /home/github-runner/.bashrc-append
+    permissions: "0644"
+    owner: github-runner:github-runner
+    content: |
+      # NVM configuration
+      export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+      [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker github-runner
+
+  # Install .NET SDK
+  - wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb
+  - dpkg -i /tmp/packages-microsoft-prod.deb
+  - rm /tmp/packages-microsoft-prod.deb
+  - apt-get update
+  - apt-get install -y dotnet-sdk-8.0
+  - dotnet --version
+
+  # Install NVM and Node.js versions as github-runner user
+  - su - github-runner -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash'
+  - su - github-runner -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm install 20'
+  - su - github-runner -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm install 22'
+  - su - github-runner -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm install 24'
+  - su - github-runner -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm alias default 24'
+  - su - github-runner -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm use default'
+
+  # Append NVM config to .bashrc
+  - cat /home/github-runner/.bashrc-append >> /home/github-runner/.bashrc
+  - rm /home/github-runner/.bashrc-append
+
+  # Create runner directories
+  - mkdir -p /opt/actions-runner-temp
+  - chown -R github-runner:github-runner /opt/actions-runner-temp
+
+  # Download and extract GitHub Actions Runner
+  - cd /opt/actions-runner-temp
+  - RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
+  - curl -o actions-runner-linux-x64.tar.gz -L "https://github.com/actions/runner/releases/download/v$${RUNNER_VERSION}/actions-runner-linux-x64-$${RUNNER_VERSION}.tar.gz"
+
+  # Setup GitHub Runners
+  - |
+    export GITHUB_TOKEN="${github_token}"
+    export GITHUB_REPO_URL="${github_repo_url}"
+    export RUNNER_COUNT=${runner_count}
+    bash /tmp/setup-runners.sh
+
+  # Cleanup
+  - rm -rf /opt/actions-runner-temp
+  - rm /tmp/setup-runners.sh
+
+  # Enable automatic security updates
+  - apt-get install -y unattended-upgrades
+  - dpkg-reconfigure -plow unattended-upgrades
+
+final_message: |
+  ========================================
+  GitHub Actions Runner VM Setup Complete
+  ========================================
+
+  Installed Software:
+  - Docker: $(docker --version)
+  - .NET SDK: $(dotnet --version)
+  - Node.js versions: 20, 22, 24 (via nvm)
+
+  GitHub Runners:
+  - Count: ${runner_count}
+  - Location: /opt/actions-runner-[1-${runner_count}]
+  - Services: actions-runner-[1-${runner_count}].service
+
+  Check runner status:
+  sudo systemctl status actions-runner-*.service
+
+  View runner logs:
+  sudo journalctl -u actions-runner-1.service -f
+
+  System is ready!
+  ========================================
