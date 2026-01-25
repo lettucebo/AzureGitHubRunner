@@ -17,7 +17,7 @@ githubConfigSecret: "github-pat-secret"
 
 # Runner 數量設定
 minRunners: 0      # 閒置時縮減到 0 節省成本
-maxRunners: 3      # 最大同時運行數量
+maxRunners: 15     # 最大同時運行數量 (一個節點可跑多個 runner)
 
 # Runner Scale Set 名稱 (GitHub workflow 中的 runs-on 值)
 runnerScaleSetName: "arc-runner-set"

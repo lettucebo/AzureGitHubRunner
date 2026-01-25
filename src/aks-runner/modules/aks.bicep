@@ -32,10 +32,10 @@ param runnerNodeVmSize string = 'Standard_D4s_v3'
 @minValue(0)
 param runnerNodeMinCount int = 0
 
-@description('Runner Pool 最大節點數')
+@description('Runner Pool 最大節點數，每個節點可運行多個 Runner Pod')
 @minValue(1)
 @maxValue(10)
-param runnerNodeMaxCount int = 3
+param runnerNodeMaxCount int = 5
 
 @description('Spot VM 最高競標價格 (-1 表示隨選價格)')
 param spotMaxPrice int = -1

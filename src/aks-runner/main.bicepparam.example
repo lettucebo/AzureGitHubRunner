@@ -21,7 +21,7 @@ param systemNodeCount = 1
 // Runner Pool 配置 (Spot VM，自動擴展)
 param runnerNodeVmSize = 'Standard_D4s_v3'
 param runnerNodeMinCount = 0 // 閒置時縮到 0
-param runnerNodeMaxCount = 3 // 最多 3 台
+param runnerNodeMaxCount = 3 // 最多 3 台，每台可跑多個 Runner Pod
 
 // 可選功能
 param enableMonitoring = true // Container Insights

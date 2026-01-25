@@ -53,9 +53,9 @@ param runnerNodeVmSize string = 'Standard_D4s_v3'
 @minValue(0)
 param runnerNodeMinCount int = 0
 
-@description('Runner Pool 最大節點數')
+@description('Runner Pool 最大節點數，每個節點可運行多個 Runner Pod')
 @minValue(1)
-@maxValue(10)
+@maxValue(3)
 param runnerNodeMaxCount int = 3
 
 // 可選功能
