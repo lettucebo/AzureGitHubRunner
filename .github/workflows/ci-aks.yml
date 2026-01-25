@@ -30,14 +30,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Azure CLI
-        uses: azure/cli@v2
-        with:
-          azcliversion: latest
-          inlineScript: |
-            az bicep install
-            az --version
-            az bicep version
+      - name: Setup Azure CLI and Bicep
+        run: |
+          # Azure CLI is pre-installed on ubuntu-latest
+          az version
+          az bicep install
+          az bicep version
       
       - name: Bicep Build (Syntax Check)
         run: |
