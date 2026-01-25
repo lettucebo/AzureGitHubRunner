@@ -1,0 +1,37 @@
+// ============================================================================
+// 參數範例檔案
+// 複製此檔案為 main.bicepparam 並填入您的設定
+// ============================================================================
+
+using 'main.bicep'
+
+// 環境設定
+param environment = 'dev'
+param projectName = 'ghrunner'
+param location = 'eastasia' // 香港區域，台灣用戶推薦
+
+// Kubernetes 版本
+param kubernetesVersion = '1.29'
+
+// System Pool 配置 (固定小型 VM)
+// 1 台省錢但無高可用，2 台有高可用但成本加倍
+param systemNodeVmSize = 'Standard_B2s'
+param systemNodeCount = 1
+
+// Runner Pool 配置 (Spot VM，自動擴展)
+param runnerNodeVmSize = 'Standard_D4s_v3'
+param runnerNodeMinCount = 0 // 閒置時縮到 0
+param runnerNodeMaxCount = 3 // 最多 3 台
+
+// 可選功能
+param enableMonitoring = true // Container Insights
+param enableAcr = false       // 使用 GitHub 官方 image，不需要 ACR
+param logRetentionDays = 30   // Log 保留天數
+
+// 標籤
+param tags = {
+  project: 'github-runner'
+  environment: 'dev'
+  managedBy: 'bicep'
+  costCenter: 'devops'
+}

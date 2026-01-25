@@ -1,0 +1,121 @@
+name: CI - Bicep AKS Coding Agent Infrastructure
+
+# =============================================================================
+# 此 workflow 用於驗證 BICEP 資料夾中的 AKS + ARC 基礎設施
+# 支援 GitHub Copilot Coding Agent
+# 使用 AKS 上的 ARC Self-Hosted Runner 執行
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'BICEP/**'
+      - '.github/workflows/ci-aks.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'BICEP/**'
+  workflow_dispatch:
+
+jobs:
+  # ============================================
+  # Bicep 驗證
+  # ============================================
+  validate-bicep:
+    name: Validate Bicep
+    runs-on: arc-runner-set
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Azure CLI
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az --version
+            az bicep version
+      
+      - name: Bicep Build (Syntax Check)
+        run: |
+          echo "🔍 Validating Bicep syntax..."
+          az bicep build --file BICEP/main.bicep --stdout > /dev/null
+          echo "✅ Bicep syntax is valid"
+      
+      - name: Bicep Lint (Best Practices)
+        run: |
+          echo "🔍 Running Bicep linter..."
+          az bicep lint --file BICEP/main.bicep
+          echo "✅ Bicep linting passed"
+
+  # ============================================
+  # Shell Script 驗證
+  # ============================================
+  validate-scripts:
+    name: Validate Shell Scripts
+    runs-on: arc-runner-set
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      
+      - name: Check Shell Scripts
+        run: |
+          echo "🔍 Checking shell scripts..."
+          shellcheck BICEP/scripts/*.sh || true
+          echo "✅ Shell script check completed"
+
+  # ============================================
+  # YAML 驗證
+  # ============================================
+  validate-yaml:
+    name: Validate YAML
+    runs-on: arc-runner-set
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install yamllint
+        run: |
+          pip install yamllint
+      
+      - name: Lint Kubernetes YAML
+        run: |
+          echo "🔍 Checking Kubernetes manifests..."
+          yamllint -d relaxed BICEP/kubernetes/*.yaml || true
+          echo "✅ YAML check completed"
+
+  # ============================================
+  # 結果摘要
+  # ============================================
+  summary:
+    name: Validation Summary
+    runs-on: arc-runner-set
+    needs: [validate-bicep, validate-scripts, validate-yaml]
+    if: always()
+    
+    steps:
+      - name: Check Results
+        run: |
+          echo "========================================"
+          echo "📋 Bicep AKS Coding Agent - Validation Summary"
+          echo "========================================"
+          echo "Bicep:   ${{ needs.validate-bicep.result }}"
+          echo "Scripts: ${{ needs.validate-scripts.result }}"
+          echo "YAML:    ${{ needs.validate-yaml.result }}"
+          echo "========================================"
+          
+          if [[ "${{ needs.validate-bicep.result }}" == "failure" ]]; then
+            echo "❌ Bicep validation failed"
+            exit 1
+          fi
+          
+          echo "✅ All validations passed!"

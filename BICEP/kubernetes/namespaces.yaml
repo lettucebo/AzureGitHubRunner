@@ -1,0 +1,21 @@
+# =============================================================================
+# Namespace 配置
+# =============================================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-systems
+  labels:
+    app.kubernetes.io/name: arc-systems
+    app.kubernetes.io/part-of: actions-runner-controller
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners
+  labels:
+    app.kubernetes.io/name: arc-runners
+    app.kubernetes.io/part-of: actions-runner-controller

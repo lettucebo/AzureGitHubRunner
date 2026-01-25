@@ -1,0 +1,88 @@
+# =============================================================================
+# ARC Runner Scale Set 配置範例
+# =============================================================================
+#
+# 注意: 建議使用 Helm 安裝而非直接 kubectl apply
+# 此檔案僅供參考，實際部署請使用 scripts/install-arc.sh
+#
+# 使用 Helm 安裝命令:
+# helm upgrade --install arc-runner-set \
+#   --namespace arc-runners \
+#   --set githubConfigUrl="https://github.com/YOUR_ORG/YOUR_REPO" \
+#   --set githubConfigSecret="github-pat-secret" \
+#   --set minRunners=0 \
+#   --set maxRunners=3 \
+#   --set containerMode.type="dind" \
+#   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+# =============================================================================
+
+---
+# GitHub PAT Secret
+# 使用以下命令建立 (更安全):
+# kubectl create secret generic github-pat-secret \
+#   --namespace arc-runners \
+#   --from-literal=github_token="YOUR_PAT_TOKEN"
+
+# 或者使用 YAML (不建議在版控中存放 token):
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: github-pat-secret
+#   namespace: arc-runners
+# type: Opaque
+# stringData:
+#   github_token: "ghp_xxxxxxxxxxxx"
+
+---
+# AutoscalingRunnerSet 配置 (範例，建議使用 Helm)
+#
+# Helm 會自動設定:
+# - GitHub 官方 runner image (ghcr.io/actions/actions-runner:latest)
+# - Docker-in-Docker (dind) 支援
+# - 自動擴展 (minRunners/maxRunners)
+#
+# 自訂配置只需透過 Helm --set 參數:
+
+# 基本配置:
+# --set githubConfigUrl="https://github.com/owner/repo"
+# --set githubConfigSecret="github-pat-secret"
+# --set minRunners=0
+# --set maxRunners=3
+
+# 容器模式 (dind = Docker-in-Docker):
+# --set containerMode.type="dind"
+
+# 指定在 Spot VM 節點執行:
+# --set "template.spec.nodeSelector.nodepool-type=runner"
+# --set "template.spec.tolerations[0].key=kubernetes.azure.com/scalesetpriority"
+# --set "template.spec.tolerations[0].operator=Equal"
+# --set "template.spec.tolerations[0].value=spot"
+# --set "template.spec.tolerations[0].effect=NoSchedule"
+
+---
+# 完整的 Helm values.yaml 範例:
+#
+# githubConfigUrl: "https://github.com/your-org/your-repo"
+# githubConfigSecret: github-pat-secret
+#
+# minRunners: 0
+# maxRunners: 3
+#
+# containerMode:
+#   type: "dind"
+#
+# template:
+#   spec:
+#     nodeSelector:
+#       nodepool-type: runner
+#     tolerations:
+#       - key: "kubernetes.azure.com/scalesetpriority"
+#         operator: "Equal"
+#         value: "spot"
+#         effect: "NoSchedule"
+#
+# 儲存為 values.yaml 後使用:
+# helm upgrade --install arc-runner-set \
+#   --namespace arc-runners \
+#   -f values.yaml \
+#   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set

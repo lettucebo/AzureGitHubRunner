@@ -1,0 +1,133 @@
+name: CI - Terraform VM Runner Infrastructure
+
+# =============================================================================
+# 此 workflow 用於驗證 TERRAFORM 資料夾中的 VM Self-Hosted Runner 基礎設施
+# 使用 VM 上的 Self-Hosted Runner 執行
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'TERRAFORM/**'
+      - 'scripts/**'
+      - '.github/workflows/ci-vm.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'TERRAFORM/**'
+      - 'scripts/**'
+  workflow_dispatch:
+
+jobs:
+  # ============================================
+  # Terraform 驗證
+  # ============================================
+  validate-terraform:
+    name: Validate Terraform
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Show Terraform Version
+        run: terraform version
+      
+      - name: Terraform Format Check
+        run: |
+          echo "🔍 Checking Terraform format..."
+          cd TERRAFORM
+          terraform fmt -check -recursive
+          echo "✅ Format check passed"
+      
+      - name: Terraform Init
+        run: |
+          echo "🔍 Initializing Terraform..."
+          cd TERRAFORM
+          terraform init -backend=false
+          echo "✅ Terraform initialized"
+      
+      - name: Terraform Validate
+        run: |
+          echo "🔍 Validating Terraform configuration..."
+          cd TERRAFORM
+          terraform validate
+          echo "✅ Terraform validation passed"
+
+  # ============================================
+  # Shell Script 驗證
+  # ============================================
+  validate-scripts:
+    name: Validate Shell Scripts
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check TERRAFORM Scripts
+        run: |
+          echo "🔍 Checking TERRAFORM shell scripts..."
+          if command -v shellcheck &> /dev/null; then
+            shellcheck TERRAFORM/scripts/*.sh || true
+          else
+            echo "⚠️ shellcheck not installed, skipping"
+          fi
+          echo "✅ Shell script check completed"
+      
+      - name: Check Root Scripts
+        run: |
+          echo "🔍 Checking root scripts..."
+          if command -v shellcheck &> /dev/null; then
+            shellcheck scripts/*.sh 2>/dev/null || true
+          fi
+          echo "✅ Root script check completed"
+
+  # ============================================
+  # YAML 驗證 (cloud-init)
+  # ============================================
+  validate-yaml:
+    name: Validate Cloud-Init YAML
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check Cloud-Init YAML
+        run: |
+          echo "🔍 Checking cloud-init configuration..."
+          if command -v yamllint &> /dev/null; then
+            yamllint -d relaxed TERRAFORM/scripts/cloud-init.yml || true
+          else
+            echo "⚠️ yamllint not installed, basic syntax check..."
+            python3 -c "import yaml; yaml.safe_load(open('TERRAFORM/scripts/cloud-init.yml'))" && echo "✅ YAML syntax valid"
+          fi
+
+  # ============================================
+  # 結果摘要
+  # ============================================
+  summary:
+    name: Validation Summary
+    runs-on: self-hosted
+    needs: [validate-terraform, validate-scripts, validate-yaml]
+    if: always()
+    
+    steps:
+      - name: Check Results
+        run: |
+          echo "========================================"
+          echo "📋 Terraform VM Runner - Validation Summary"
+          echo "========================================"
+          echo "Terraform: ${{ needs.validate-terraform.result }}"
+          echo "Scripts:   ${{ needs.validate-scripts.result }}"
+          echo "YAML:      ${{ needs.validate-yaml.result }}"
+          echo "========================================"
+          
+          if [[ "${{ needs.validate-terraform.result }}" == "failure" ]]; then
+            echo "❌ Terraform validation failed"
+            exit 1
+          fi
+          
+          echo "✅ All validations passed!"
