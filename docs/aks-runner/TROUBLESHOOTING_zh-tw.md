@@ -1,17 +1,17 @@
-[繁體中文](TROUBLESHOOTING_zh-tw.md) | **English**
+🌏 Language / 語言: [English](TROUBLESHOOTING.md) | [繁體中文](TROUBLESHOOTING_zh-tw.md)
 
 ---
 
-# AKS + ARC Troubleshooting Guide
+# AKS + ARC 故障排除指南
 
-Problems and solutions you may encounter during deployment.
+部署過程中可能遇到的問題和解決方案。
 
 ---
 
-## Table of Contents
+## 目錄
 
-- [AKS + ARC Troubleshooting Guide](#aks--arc-troubleshooting-guide)
-  - [Table of Contents](#table-of-contents)
+- [AKS + ARC 故障排除指南](#aks--arc-故障排除指南)
+  - [目錄](#目錄)
   - [Kubernetes 版本不支援](#kubernetes-版本不支援)
     - [症狀](#症狀)
     - [原因](#原因)

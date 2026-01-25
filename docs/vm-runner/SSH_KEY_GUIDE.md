@@ -1,58 +1,62 @@
-# SSH Key 完整使用指南
+[繁體中文](SSH_KEY_GUIDE_zh-tw.md) | **English**
 
-> 📂 **路徑說明**: 本文件說明如何為 VM Runner 設定 SSH Key。
-> - Terraform 設定檔位於：`src/vm-runner/`
-> - 備份腳本位於：`src/common-scripts/`
+---
 
-## 📚 什麼是 SSH Key？
+# Complete SSH Key Guide
 
-SSH Key 是一對加密金鑰，用於安全地連線到遠端伺服器：
+> 📂 **Path Description**: This document explains how to set up SSH Keys for VM Runner.
+> - Terraform configuration files are located at: `src/vm-runner/`
+> - Backup scripts are located at: `src/common-scripts/`
+
+## 📚 What is an SSH Key?
+
+An SSH Key is a pair of cryptographic keys used to securely connect to remote servers:
 
 ```
-SSH Key Pair（金鑰對）
-├── 私鑰 (Private Key)  → id_rsa         ⚠️ 絕對保密，像密碼一樣
-└── 公鑰 (Public Key)   → id_rsa.pub     ✅ 可以公開，放在伺服器上
+SSH Key Pair
+├── Private Key  → id_rsa         ⚠️ Keep Secret (like a password)
+└── Public Key   → id_rsa.pub     ✅ Can be public (place on servers)
 ```
 
-**運作原理**：
-1. 公鑰放在伺服器上（Azure VM）
-2. 私鑰保存在您的電腦上
-3. 連線時，伺服器用公鑰驗證您持有對應的私鑰
-4. 無需密碼即可安全登入
+**How it works**:
+1. Public key is placed on the server (Azure VM)
+2. Private key is kept on your computer
+3. When connecting, the server verifies you have the matching private key
+4. Secure login without passwords
 
-## 🔐 Step 1: 生成 SSH Key
+## 🔐 Step 1: Generate SSH Key
 
-### 在 PowerShell 中執行：
+### Execute in PowerShell:
 
 ```powershell
-# 1. 開啟 PowerShell（以一般使用者身份即可）
+# 1. Open PowerShell (regular user access is sufficient)
 
-# 2. 建立 .ssh 目錄（如果不存在）
+# 2. Create .ssh directory (if it doesn't exist)
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.ssh"
 
-# 3. 生成 SSH key pair
+# 3. Generate SSH key pair
 ssh-keygen -t rsa -b 4096 -C "your_email@example.com" -f "$env:USERPROFILE\.ssh\id_rsa"
 ```
 
-### 執行過程中的提示：
+### Prompts during execution:
 
 ```
 Generating public/private rsa key pair.
 Enter passphrase (empty for no passphrase): 
 ```
 
-**🔒 建議輸入密碼（passphrase）保護私鑰：**
-- 如果私鑰被盜，還需要密碼才能使用
-- 輸入時不會顯示任何字元（這是正常的）
-- 記住這個密碼！
+**🔒 Recommended to enter a passphrase to protect the private key:**
+- If the private key is stolen, the passphrase is still required to use it
+- No characters will be displayed when typing (this is normal)
+- Remember this password!
 
 ```
 Enter same passphrase again:
 ```
 
-再次輸入相同密碼確認。
+Enter the same passphrase again to confirm.
 
-### 完成後會顯示：
+### Upon completion, you'll see:
 
 ```
 Your identification has been saved in C:\Users\tzyu\.ssh\id_rsa
@@ -61,146 +65,146 @@ The key fingerprint is:
 SHA256:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx your_email@example.com
 ```
 
-## 📂 Step 2: 檢查生成的檔案
+## 📂 Step 2: Check Generated Files
 
 ```powershell
-# 列出 .ssh 目錄的檔案
+# List files in .ssh directory
 Get-ChildItem "$env:USERPROFILE\.ssh"
 ```
 
-您應該會看到：
+You should see:
 
 ```
 Mode                 LastWriteTime         Length Name
 ----                 -------------         ------ ----
--a----        2026/1/23   下午 02:30           3381 id_rsa          ⚠️ 私鑰
--a----        2026/1/23   下午 02:30            742 id_rsa.pub      ✅ 公鑰
+-a----        2026/1/23   PM 02:30           3381 id_rsa          ⚠️ Private Key
+-a----        2026/1/23   PM 02:30            742 id_rsa.pub      ✅ Public Key
 ```
 
-### 查看公鑰內容：
+### View public key content:
 
 ```powershell
-# 顯示公鑰（這個要放到 Terraform 配置中）
+# Display public key (this goes into Terraform configuration)
 Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub"
 ```
 
-輸出範例：
+Example output:
 ```
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...很長的字串...xxxxx your_email@example.com
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...long string...xxxxx your_email@example.com
 ```
 
-## 💾 Step 3: 備份到 OneDrive
+## 💾 Step 3: Backup to OneDrive
 
-### 方案 A: 手動備份（推薦新手）
+### Option A: Manual Backup (Recommended for beginners)
 
 ```powershell
-# 1. 建立 OneDrive 備份目錄
+# 1. Create OneDrive backup directory
 $BackupPath = "$env:OneDrive\SSH-Keys-Backup"
 New-Item -ItemType Directory -Force -Path $BackupPath
 
-# 2. 複製金鑰到 OneDrive
+# 2. Copy keys to OneDrive
 Copy-Item "$env:USERPROFILE\.ssh\id_rsa" -Destination "$BackupPath\id_rsa"
 Copy-Item "$env:USERPROFILE\.ssh\id_rsa.pub" -Destination "$BackupPath\id_rsa.pub"
 
-# 3. 建立說明檔案
+# 3. Create documentation file
 @"
-SSH Key 備份
-建立日期: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+SSH Key Backup
+Created: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 
-檔案說明:
-- id_rsa      → 私鑰（絕對保密！）
-- id_rsa.pub  → 公鑰（可以公開）
+File descriptions:
+- id_rsa      → Private key (Keep Secret!)
+- id_rsa.pub  → Public key (Can be public)
 
-使用方式:
-1. 在新電腦上複製這兩個檔案到 C:\Users\<你的使用者名稱>\.ssh\
-2. 設定私鑰權限（見下方指令）
-3. 即可使用
+How to use:
+1. On a new computer, copy these two files to C:\Users\<your-username>\.ssh\
+2. Set private key permissions (see commands below)
+3. Ready to use
 
-重要提醒:
-⚠️ 私鑰 (id_rsa) 不要分享給任何人
-⚠️ 不要上傳到 GitHub、Email 等公開位置
-⚠️ 定期更新備份
+Important reminders:
+⚠️ Private key (id_rsa) - Never share with anyone
+⚠️ Don't upload to GitHub, email, or other public places
+⚠️ Update backups regularly
 "@ | Out-File -FilePath "$BackupPath\README.txt" -Encoding UTF8
 
-# 4. 確認備份
-Write-Host "✅ 備份完成！" -ForegroundColor Green
-Write-Host "備份位置: $BackupPath" -ForegroundColor Cyan
+# 4. Confirm backup
+Write-Host "✅ Backup complete!" -ForegroundColor Green
+Write-Host "Backup location: $BackupPath" -ForegroundColor Cyan
 explorer $BackupPath
 ```
 
-### 方案 B: 建立自動備份腳本
+### Option B: Create Automated Backup Script
 
-建立一個 PowerShell 腳本以便日後更新：
+Create a PowerShell script for future updates:
 
 ```powershell
-# 建立備份腳本
+# Create backup script
 $ScriptContent = @'
-# SSH Key 備份腳本
+# SSH Key Backup Script
 $SourcePath = "$env:USERPROFILE\.ssh"
 $BackupPath = "$env:OneDrive\SSH-Keys-Backup"
 $BackupDate = Get-Date -Format "yyyy-MM-dd_HHmmss"
 
-# 建立帶日期的備份
+# Create dated backup
 $DateBackupPath = "$BackupPath\backup_$BackupDate"
 New-Item -ItemType Directory -Force -Path $DateBackupPath | Out-Null
 
-# 複製檔案
+# Copy files
 Copy-Item "$SourcePath\id_rsa" -Destination "$DateBackupPath\id_rsa"
 Copy-Item "$SourcePath\id_rsa.pub" -Destination "$DateBackupPath\id_rsa.pub"
 
-# 也保留最新版本在根目錄
+# Also keep latest version in root directory
 Copy-Item "$SourcePath\id_rsa" -Destination "$BackupPath\id_rsa" -Force
 Copy-Item "$SourcePath\id_rsa.pub" -Destination "$BackupPath\id_rsa.pub" -Force
 
-Write-Host "✅ SSH Key 已備份到: $DateBackupPath" -ForegroundColor Green
+Write-Host "✅ SSH Key backed up to: $DateBackupPath" -ForegroundColor Green
 '@
 
 $ScriptPath = "$env:OneDrive\SSH-Keys-Backup\Backup-SSHKey.ps1"
 New-Item -ItemType Directory -Force -Path "$env:OneDrive\SSH-Keys-Backup" | Out-Null
 $ScriptContent | Out-File -FilePath $ScriptPath -Encoding UTF8
 
-Write-Host "✅ 備份腳本已建立: $ScriptPath" -ForegroundColor Green
-Write-Host "之後執行此腳本即可更新備份" -ForegroundColor Cyan
+Write-Host "✅ Backup script created: $ScriptPath" -ForegroundColor Green
+Write-Host "Run this script later to update backups" -ForegroundColor Cyan
 ```
 
-## 🔄 Step 4: 在其他電腦上使用備份的 Key
+## 🔄 Step 4: Using Backed-up Keys on Another Computer
 
-### 在新電腦上還原 SSH Key：
+### Restore SSH Key on a new computer:
 
 ```powershell
-# 1. 確認 OneDrive 已同步
+# 1. Confirm OneDrive is synced
 
-# 2. 建立 .ssh 目錄
+# 2. Create .ssh directory
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.ssh"
 
-# 3. 從 OneDrive 複製金鑰
+# 3. Copy keys from OneDrive
 Copy-Item "$env:OneDrive\SSH-Keys-Backup\id_rsa" -Destination "$env:USERPROFILE\.ssh\id_rsa"
 Copy-Item "$env:OneDrive\SSH-Keys-Backup\id_rsa.pub" -Destination "$env:USERPROFILE\.ssh\id_rsa.pub"
 
-# 4. 設定私鑰檔案權限（重要！）
-# Windows 需要移除其他使用者的存取權限
+# 4. Set private key file permissions (Important!)
+# Windows requires removing access permissions for other users
 icacls "$env:USERPROFILE\.ssh\id_rsa" /inheritance:r
 icacls "$env:USERPROFILE\.ssh\id_rsa" /grant:r "$env:USERNAME:(R)"
 
-# 5. 驗證權限
+# 5. Verify permissions
 icacls "$env:USERPROFILE\.ssh\id_rsa"
 
-Write-Host "✅ SSH Key 已還原！" -ForegroundColor Green
+Write-Host "✅ SSH Key restored!" -ForegroundColor Green
 ```
 
-## 🚀 Step 5: 使用 SSH Key 連線到 Azure VM
+## 🚀 Step 5: Connect to Azure VM Using SSH Key
 
-### 測試連線：
+### Test connection:
 
 ```powershell
-# 格式: ssh <使用者名稱>@<VM IP 位址>
+# Format: ssh <username>@<VM IP address>
 ssh azureuser@20.x.x.x
 
-# 如果設定了 passphrase，會要求輸入
+# If passphrase was set, you'll be prompted to enter it
 Enter passphrase for key 'C:\Users\tzyu\.ssh\id_rsa':
 ```
 
-### 第一次連線的提示：
+### First connection prompt:
 
 ```
 The authenticity of host '20.x.x.x (20.x.x.x)' can't be established.
@@ -208,169 +212,169 @@ ECDSA key fingerprint is SHA256:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.
 Are you sure you want to continue connecting (yes/no/[fingerprint])?
 ```
 
-輸入 `yes` 並按 Enter。
+Type `yes` and press Enter.
 
-## 📝 Step 6: 將公鑰加入 Terraform 配置
+## 📝 Step 6: Add Public Key to Terraform Configuration
 
 ```powershell
-# 1. 複製公鑰內容到剪貼簿
+# 1. Copy public key content to clipboard
 Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | Set-Clipboard
 
-Write-Host "✅ 公鑰已複製到剪貼簿！" -ForegroundColor Green
-Write-Host "現在可以貼到 terraform.tfvars 中" -ForegroundColor Cyan
+Write-Host "✅ Public key copied to clipboard!" -ForegroundColor Green
+Write-Host "You can now paste it into terraform.tfvars" -ForegroundColor Cyan
 ```
 
-### 2. 編輯 terraform.tfvars：
+### 2. Edit terraform.tfvars:
 
 ```powershell
-# 進入 VM Runner 目錄
+# Navigate to VM Runner directory
 cd src/vm-runner
 ```
 
 ```hcl
 # src/vm-runner/terraform.tfvars
 
-# 貼上剛才複製的公鑰（整行，包含 ssh-rsa 開頭和 email 結尾）
-ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDxxxxxx...很長的字串...xxxxx your_email@example.com"
+# Paste the public key you just copied (entire line, from ssh-rsa to email)
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDxxxxxx...long string...xxxxx your_email@example.com"
 ```
 
-## 🔐 安全性最佳實踐
+## 🔐 Security Best Practices
 
-### ✅ 應該做的：
+### ✅ What you SHOULD do:
 
-1. **使用 passphrase 保護私鑰**
-   - 即使私鑰被盜，沒有密碼也無法使用
+1. **Use passphrase to protect private key**
+   - Even if the private key is stolen, it can't be used without the passphrase
 
-2. **定期備份**
+2. **Regular backups**
    ```powershell
-   # 執行備份腳本
+   # Run backup script
    & "$env:OneDrive\SSH-Keys-Backup\Backup-SSHKey.ps1"
    ```
 
-3. **設定正確的檔案權限**
-   - 私鑰只有您能讀取
-   - 其他使用者不應有任何權限
+3. **Set correct file permissions**
+   - Only you should be able to read the private key
+   - Other users should have no permissions
 
-4. **為不同用途使用不同的 key**
+4. **Use different keys for different purposes**
    ```powershell
-   # 可以建立多個 key
+   # You can create multiple keys
    ssh-keygen -t rsa -b 4096 -C "work@company.com" -f "$env:USERPROFILE\.ssh\id_rsa_work"
    ssh-keygen -t rsa -b 4096 -C "personal@email.com" -f "$env:USERPROFILE\.ssh\id_rsa_personal"
    ```
 
-### ❌ 不應該做的：
+### ❌ What you should NOT do:
 
-1. **❌ 不要分享私鑰**
-   - 私鑰就像密碼，只屬於您
+1. **❌ Don't share the private key**
+   - The private key is like a password, it belongs only to you
 
-2. **❌ 不要將私鑰上傳到 GitHub**
-   - 公鑰可以，私鑰絕對不行
+2. **❌ Don't upload private key to GitHub**
+   - Public key is fine, private key absolutely not
 
-3. **❌ 不要用 Email 傳送私鑰**
-   - Email 不安全
+3. **❌ Don't send private key via Email**
+   - Email is not secure
 
-4. **❌ 不要在公共電腦上使用您的私鑰**
-   - 可能被竊取
+4. **❌ Don't use your private key on public computers**
+   - It could be stolen
 
-## 🛠️ 常見問題排解
+## 🛠️ Troubleshooting
 
-### Q1: 忘記 passphrase 怎麼辦？
+### Q1: Forgot the passphrase, what should I do?
 
-**答**：無法復原，必須重新生成新的 key pair。這就是為什麼要記住 passphrase！
+**Answer**: Cannot be recovered, you must generate a new key pair. That's why it's important to remember your passphrase!
 
-### Q2: 可以不設定 passphrase 嗎？
+### Q2: Can I skip setting a passphrase?
 
-**答**：可以，但不建議。生成時直接按 Enter 跳過即可。
+**Answer**: Yes, but not recommended. Just press Enter when prompted during generation.
 
-### Q3: 如何查看我的公鑰指紋（fingerprint）？
+### Q3: How do I view my public key fingerprint?
 
 ```powershell
 ssh-keygen -lf "$env:USERPROFILE\.ssh\id_rsa.pub"
 ```
 
-### Q4: OneDrive 備份安全嗎？
+### Q4: Is OneDrive backup secure?
 
-**答**：
-- ✅ 公鑰備份完全沒問題
-- ⚠️ 私鑰備份需注意：
-  - 確保 OneDrive 帳號有強密碼和 2FA
-  - 最好使用 passphrase 保護私鑰
-  - 考慮加密整個備份資料夾
+**Answer**:
+- ✅ Public key backup is completely fine
+- ⚠️ Private key backup requires attention:
+  - Ensure OneDrive account has strong password and 2FA
+  - Best to use passphrase to protect private key
+  - Consider encrypting the entire backup folder
 
-### 加密 OneDrive 備份資料夾（進階）：
+### Encrypt OneDrive backup folder (Advanced):
 
 ```powershell
-# 使用 Windows EFS 加密備份資料夾
+# Encrypt backup folder using Windows EFS
 $BackupPath = "$env:OneDrive\SSH-Keys-Backup"
 (Get-Item $BackupPath).Encrypt()
 
-Write-Host "✅ 備份資料夾已加密！" -ForegroundColor Green
-Write-Host "只有您的 Windows 帳號能解密" -ForegroundColor Cyan
+Write-Host "✅ Backup folder encrypted!" -ForegroundColor Green
+Write-Host "Only your Windows account can decrypt" -ForegroundColor Cyan
 ```
 
-### Q5: SSH 連線時出現 "Permission denied"
+### Q5: Getting "Permission denied" when connecting via SSH
 
-**檢查清單**：
-1. 公鑰是否正確複製到 terraform.tfvars？
-2. 私鑰權限是否正確？
-3. 是否使用正確的使用者名稱？
+**Checklist**:
+1. Is the public key correctly copied to terraform.tfvars?
+2. Are the private key permissions correct?
+3. Are you using the correct username?
 
 ```powershell
-# 重新設定私鑰權限
+# Reset private key permissions
 icacls "$env:USERPROFILE\.ssh\id_rsa" /inheritance:r
 icacls "$env:USERPROFILE\.ssh\id_rsa" /grant:r "$env:USERNAME:(R)"
 ```
 
-## 📋 完整檢查清單
+## 📋 Complete Checklist
 
-部署 Azure VM 前：
+Before deploying Azure VM:
 
-- [ ] 已生成 SSH key pair
-- [ ] 已設定 passphrase（建議）
-- [ ] 已備份到 OneDrive
-- [ ] 已複製公鑰到 terraform.tfvars
-- [ ] 已測試公鑰內容正確（以 `ssh-rsa` 開頭）
-- [ ] 已設定私鑰正確權限
-- [ ] 已建立備份腳本（可選）
+- [ ] Generated SSH key pair
+- [ ] Set passphrase (recommended)
+- [ ] Backed up to OneDrive
+- [ ] Copied public key to terraform.tfvars
+- [ ] Verified public key content is correct (starts with `ssh-rsa`)
+- [ ] Set correct private key permissions
+- [ ] Created backup script (optional)
 
-## 🎯 快速參考指令
+## 🎯 Quick Reference Commands
 
 ```powershell
-# 生成新 key
+# Generate new key
 ssh-keygen -t rsa -b 4096 -C "your_email@example.com" -f "$env:USERPROFILE\.ssh\id_rsa"
 
-# 查看公鑰
+# View public key
 Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub"
 
-# 複製公鑰到剪貼簿
+# Copy public key to clipboard
 Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | Set-Clipboard
 
-# 備份到 OneDrive
+# Backup to OneDrive
 Copy-Item "$env:USERPROFILE\.ssh\*" -Destination "$env:OneDrive\SSH-Keys-Backup\" -Force
 
-# 從 OneDrive 還原
+# Restore from OneDrive
 Copy-Item "$env:OneDrive\SSH-Keys-Backup\id_rsa*" -Destination "$env:USERPROFILE\.ssh\" -Force
 
-# 設定權限
+# Set permissions
 icacls "$env:USERPROFILE\.ssh\id_rsa" /inheritance:r
 icacls "$env:USERPROFILE\.ssh\id_rsa" /grant:r "$env:USERNAME:(R)"
 
-# SSH 連線
+# SSH connect
 ssh azureuser@<VM-IP>
 
-# 查看 SSH key 指紋
+# View SSH key fingerprint
 ssh-keygen -lf "$env:USERPROFILE\.ssh\id_rsa.pub"
 ```
 
-## 🎓 下一步
+## 🎓 Next Steps
 
-完成 SSH key 設定後：
+After completing SSH key setup:
 
-1. ✅ 將公鑰填入 `src/vm-runner/terraform.tfvars` 的 `ssh_public_key` 參數
-2. ✅ 進入 `src/vm-runner` 目錄，執行 `terraform apply` 部署 VM
-3. ✅ 使用 `ssh azureuser@<VM-IP>` 連線測試
-4. ✅ 定期執行備份腳本
+1. ✅ Add public key to `ssh_public_key` parameter in `src/vm-runner/terraform.tfvars`
+2. ✅ Navigate to `src/vm-runner` directory and run `terraform apply` to deploy VM
+3. ✅ Test connection using `ssh azureuser@<VM-IP>`
+4. ✅ Run backup script regularly
 
 ---
 
-**恭喜！** 🎉 您現在已經掌握 SSH key 的使用和管理！
+**Congratulations!** 🎉 You now master SSH key usage and management!

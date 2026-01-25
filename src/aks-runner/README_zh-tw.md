@@ -1,17 +1,17 @@
-[繁體中文](README_zh-tw.md) | **English**
+🌏 Language / 語言: [English](README.md) | [繁體中文](README_zh-tw.md)
 
 ---
 
-# AKS + ARC + Spot VM Architecture Deployment Guide
+# AKS + ARC + Spot VM 架構部署指南
 
-Use Bicep to create AKS clusters on Azure and run GitHub Self-hosted Runners with ARC (Actions Runner Controller).
+使用 Bicep 在 Azure 上建立 AKS 叢集，配合 ARC (Actions Runner Controller) 執行 GitHub Self-hosted Runners。
 
-## ✅ Supported Features
+## ✅ 支援功能
 
-| Feature | Support | Description |
-|---------|:-------:|-------------|
-| GitHub Actions | ✅ | Execute CI/CD workflows |
-| GitHub Copilot Coding Agent | ✅ | Execute Copilot automation tasks |
+| 功能 | 支援 | 說明 |
+|------|:----:|------|
+| GitHub Actions | ✅ | 執行 CI/CD workflows |
+| GitHub Copilot Coding Agent | ✅ | 執行 Copilot 自動化任務 |
 | 使用 GitHub 官方 Runner Image | ✅ | **無需自訂 image** |
 | Spot VM 自動擴展 | ✅ | 節省 60-80% 成本 |
 

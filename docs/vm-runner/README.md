@@ -1,18 +1,22 @@
-# VM Self-Hosted Runner 文件
+[繁體中文](README_zh-tw.md) | **English**
 
-使用 Terraform 在 Azure 上建立 Linux VM，並自動配置多個 GitHub Self-hosted Runners。
+---
 
-## 📚 文件索引
+# VM Self-Hosted Runner Documentation
 
-| 文件 | 說明 |
-|------|------|
-| [QUICKSTART.md](QUICKSTART.md) | 快速開始指南 |
-| [SSH_QUICKSTART.md](SSH_QUICKSTART.md) | SSH 快速設定 |
-| [SSH_KEY_GUIDE.md](SSH_KEY_GUIDE.md) | SSH 金鑰完整指南 |
-| [SSH_SIMPLE_GUIDE.md](SSH_SIMPLE_GUIDE.md) | SSH 簡易指南 |
-| [SPOT_VM_GUIDE.md](SPOT_VM_GUIDE.md) | Spot VM 成本優化指南 |
+Deploy Linux VMs on Azure using Terraform and automatically configure multiple GitHub Self-hosted Runners.
 
-## 🏗️ 架構
+## 📚 Documentation Index
+
+| Document | Description |
+|----------|-------------|
+| [QUICKSTART.md](QUICKSTART.md) | Quick start guide |
+| [SSH_QUICKSTART.md](SSH_QUICKSTART.md) | SSH quick setup |
+| [SSH_KEY_GUIDE.md](SSH_KEY_GUIDE.md) | Complete SSH key guide |
+| [SSH_SIMPLE_GUIDE.md](SSH_SIMPLE_GUIDE.md) | Simple SSH guide |
+| [SPOT_VM_GUIDE.md](SPOT_VM_GUIDE.md) | Spot VM cost optimization guide |
+
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────┐
@@ -26,17 +30,17 @@
 │  • .NET SDK 8.0                         │
 │  • Node.js (20, 22, 24)                 │
 │  • Docker                                │
-│  • systemd 服務管理                      │
+│  • systemd service management           │
 └─────────────────────────────────────────┘
 ```
 
-## 💰 成本估算
+## 💰 Cost Estimation
 
-| VM 類型 | 規格 | 一般價格 | Spot 價格 | 節省 |
-|---------|------|---------|----------|------|
-| Standard_D4s_v5 | 4C/16G | ~$150/月 | ~$29/月 | 80% |
-| Standard_D8s_v5 | 8C/32G | ~$300/月 | ~$58/月 | 80% |
+| VM Type | Specs | Regular Price | Spot Price | Savings |
+|---------|-------|--------------|-----------|---------|
+| Standard_D4s_v5 | 4C/16G | ~$150/month | ~$29/month | 80% |
+| Standard_D8s_v5 | 8C/32G | ~$300/month | ~$58/month | 80% |
 
-## 🔗 原始碼
+## 🔗 Source Code
 
-原始碼位於 [src/vm-runner/](../../src/vm-runner/)
+Source code is located at [src/vm-runner/](../../src/vm-runner/)

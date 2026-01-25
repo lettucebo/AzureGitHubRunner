@@ -1,104 +1,108 @@
-# Azure VM for GitHub Self-hosted Runners - 快速開始指南
+[繁體中文](QUICKSTART_zh-tw.md) | **English**
 
-> 📁 **原始碼位置**: `src/vm-runner/`
+---
+
+# Azure VM for GitHub Self-hosted Runners - Quick Start Guide
+
+> 📁 **Source Code Location**: `src/vm-runner/`
 >
-> 所有 Terraform 命令請在 `src/vm-runner/` 目錄下執行。
+> Execute all Terraform commands in the `src/vm-runner/` directory.
 
-## 📋 前置需求
+## 📋 Prerequisites
 
-在開始之前，請確保您已經：
+Before you begin, make sure you have:
 
-1. ✅ 安裝 [Terraform](https://www.terraform.io/downloads) (版本 >= 1.0)
-2. ✅ 安裝 [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli)
-3. ✅ 擁有 Azure 訂閱帳號
-4. ✅ 擁有 GitHub 帳號並準備好 Personal Access Token
+1. ✅ Installed [Terraform](https://www.terraform.io/downloads) (version >= 1.0)
+2. ✅ Installed [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli)
+3. ✅ An Azure subscription account
+4. ✅ A GitHub account with a Personal Access Token ready
 
-## 🚀 快速開始（5 分鐘部署）
+## 🚀 Quick Start (5-minute deployment)
 
-### 步驟 0: 進入專案目錄
+### Step 0: Navigate to the project directory
 
 ```bash
 cd src/vm-runner
 ```
 
-### 步驟 1: 準備 SSH 金鑰
+### Step 1: Prepare SSH Key
 
-如果您還沒有 SSH 金鑰，請執行：
+If you don't have an SSH key yet, run:
 
 ```bash
-# 產生新的 SSH 金鑰
+# Generate a new SSH key
 ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
 
-# 檢視公鑰內容（稍後需要複製到 terraform.tfvars）
+# View public key content (you'll need to copy this to terraform.tfvars)
 cat ~/.ssh/id_rsa.pub
 ```
 
-### 步驟 2: 取得 GitHub Personal Access Token
+### Step 2: Get GitHub Personal Access Token
 
-1. 前往 GitHub: https://github.com/settings/tokens/new
-2. 設定 Token 名稱（例如：Azure VM Runner Token）
-3. 選擇權限：
+1. Go to GitHub: https://github.com/settings/tokens/new
+2. Set Token name (e.g., Azure VM Runner Token)
+3. Select permissions:
    - ✅ `repo` (Full control of private repositories)
    - ✅ `admin:org` > `read:org` (Read org and team membership)
-4. 點擊 "Generate token" 並**立即複製** Token（只會顯示一次！）
+4. Click "Generate token" and **copy it immediately** (only shown once!)
 
-### 步驟 3: 登入 Azure
+### Step 3: Login to Azure
 
 ```bash
-# 登入 Azure
+# Login to Azure
 az login
 
-# 查看可用的訂閱
+# View available subscriptions
 az account list --output table
 
-# 設定要使用的訂閱
+# Set the subscription to use
 az account set --subscription "YOUR-SUBSCRIPTION-ID"
 ```
 
-### 步驟 4: 配置 Terraform 變數
+### Step 4: Configure Terraform Variables
 
 ```bash
-# 複製範例檔案
+# Copy the example file
 cp terraform.tfvars.example terraform.tfvars
 
-# 編輯變數檔案（使用您喜歡的編輯器）
-code terraform.tfvars  # 或使用 vim, nano 等
+# Edit the variables file (use your preferred editor)
+code terraform.tfvars  # or use vim, nano, etc.
 ```
 
-**必須修改的重要參數：**
+**Important parameters you must modify:**
 
 ```hcl
-# 替換為您的 SSH 公鑰
+# Replace with your SSH public key
 ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC..."
 
-# 替換為您的 GitHub Token
+# Replace with your GitHub Token
 github_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
-# 替換為您的 GitHub Repository URL
+# Replace with your GitHub Repository URL
 github_repo_url = "https://github.com/your-username/your-repository"
 
-# 選擇要建立的 Runner 數量（建議 2-3 個）
+# Choose the number of Runners to create (recommend 2-3)
 runner_count = 3
 ```
 
-### 步驟 5: 部署！
+### Step 5: Deploy!
 
 ```bash
-# 初始化 Terraform
+# Initialize Terraform
 terraform init
 
-# 檢視執行計畫（確認要建立的資源）
+# View the execution plan (confirm resources to be created)
 terraform plan
 
-# 執行部署（輸入 'yes' 確認）
+# Execute deployment (enter 'yes' to confirm)
 terraform apply
 ```
 
-⏱️ **部署時間約 5-10 分鐘**
+⏱️ **Deployment takes approximately 5-10 minutes**
 
-### 步驟 6: 驗證部署
+### Step 6: Verify Deployment
 
-部署完成後，您會看到輸出資訊：
+After deployment completes, you'll see output information:
 
 ```
 Outputs:
@@ -113,31 +117,31 @@ runner_services = [
 ]
 ```
 
-使用 SSH 連線到 VM：
+Connect to the VM using SSH:
 
 ```bash
 ssh azureuser@<public_ip_address>
 ```
 
-檢查 Runners 狀態：
+Check Runner status:
 
 ```bash
-# 檢查所有 runner 服務
+# Check all runner services
 sudo systemctl status actions-runner-*.service
 
-# 檢視特定 runner 的日誌
+# View logs for a specific runner
 sudo journalctl -u actions-runner-1.service -f
 ```
 
-### 步驟 7: 在 GitHub 上驗證
+### Step 7: Verify on GitHub
 
-1. 前往您的 GitHub Repository
-2. 點擊 `Settings` > `Actions` > `Runners`
-3. 您應該會看到 3 個 "azure-runner-1", "azure-runner-2", "azure-runner-3"，狀態為 **Idle** 🟢
+1. Go to your GitHub Repository
+2. Click `Settings` > `Actions` > `Runners`
+3. You should see 3 runners named "azure-runner-1", "azure-runner-2", "azure-runner-3" with status **Idle** 🟢
 
-## 🎯 測試 Runner
+## 🎯 Test the Runners
 
-建立一個簡單的 GitHub Actions workflow 來測試：
+Create a simple GitHub Actions workflow to test:
 
 ```yaml
 # .github/workflows/test-runner.yml
@@ -182,102 +186,102 @@ jobs:
           node --version
 ```
 
-## 🔧 常見問題排解
+## 🔧 Troubleshooting
 
-### Q1: Runner 無法註冊到 GitHub
+### Q1: Runner cannot register with GitHub
 
-**檢查：**
+**Check:**
 ```bash
-# 查看 runner 日誌
+# View runner logs
 sudo journalctl -u actions-runner-1.service -n 100
 
-# 檢查 GitHub Token 權限
-# 確保 Token 有 'repo' 和 'admin:org' 權限
+# Verify GitHub Token permissions
+# Ensure Token has 'repo' and 'admin:org' permissions
 ```
 
-### Q2: 無法 SSH 連線到 VM
+### Q2: Cannot SSH connect to VM
 
-**檢查：**
+**Check:**
 ```bash
-# 驗證 SSH 公鑰是否正確
+# Verify SSH public key is correct
 cat ~/.ssh/id_rsa.pub
 
-# 檢查 NSG 規則
+# Check NSG rules
 az network nsg rule list --resource-group rg-github-runners --nsg-name gh-runner-nsg --output table
 ```
 
-### Q3: Node.js 版本找不到
+### Q3: Node.js version not found
 
-**解決方法：**
+**Solution:**
 ```bash
-# SSH 到 VM 後，切換到 github-runner 使用者
+# After SSH to VM, switch to github-runner user
 sudo su - github-runner
 
-# 檢查 nvm
+# Check nvm
 nvm list
 
-# 手動安裝缺少的版本
+# Manually install missing version
 nvm install 24
 ```
 
-## 📊 監控與維護
+## 📊 Monitoring and Maintenance
 
-### 查看資源使用情況
+### View Resource Usage
 
 ```bash
-# CPU 和記憶體使用
+# CPU and memory usage
 htop
 
-# 磁碟使用
+# Disk usage
 df -h
 
-# 檢查 runner 工作目錄大小
+# Check runner working directory size
 du -sh /opt/actions-runner-*/_work
 ```
 
-### 定期維護
+### Regular Maintenance
 
 ```bash
-# 更新系統套件
+# Update system packages
 sudo apt update && sudo apt upgrade -y
 
-# 清理 Docker 資源
+# Clean Docker resources
 docker system prune -af
 
-# 清理舊的 runner 工作檔案
+# Clean old runner work files
 sudo find /opt/actions-runner-*/_work -type f -mtime +7 -delete
 ```
 
-## 💰 成本優化建議
+## 💰 Cost Optimization Recommendations
 
-1. **使用 Reserved Instances**: 節省 40-60% 成本
-2. **設定自動關機**: 非工作時間自動關閉 VM
-3. **使用 Spot Instances**: 適合非關鍵性工作負載（可節省 70-90%）
+1. **Use Reserved Instances**: Save 40-60% on costs
+2. **Set up auto-shutdown**: Automatically shut down VM during non-working hours
+3. **Use Spot Instances**: Suitable for non-critical workloads (save 70-90%)
 
-## 🗑️ 清理資源
+## 🗑️ Clean Up Resources
 
-當不再需要時，執行：
+When no longer needed, run:
 
 ```bash
-# 刪除所有 Terraform 建立的資源
+# Delete all resources created by Terraform
 terraform destroy
 
-# 輸入 'yes' 確認
+# Enter 'yes' to confirm
 ```
 
-## 📚 進階主題
+## 📚 Advanced Topics
 
-- [自訂 Runner Labels](./docs/custom-labels.md)
-- [整合 Azure Monitor](./docs/monitoring.md)
-- [使用 Azure Key Vault 管理 Secrets](./docs/key-vault.md)
-- [設定自動擴展](./docs/auto-scaling.md)
+- [Custom Runner Labels](./docs/custom-labels.md)
+- [Azure Monitor Integration](./docs/monitoring.md)
+- [Managing Secrets with Azure Key Vault](./docs/key-vault.md)
+- [Setting up Auto-scaling](./docs/auto-scaling.md)
 
-## 🤝 需要協助？
+## 🤝 Need Help?
 
-- 查看完整文檔：[README.md](README.md)
-- GitHub Issues：[提交問題](https://github.com/your-repo/issues)
-- Azure 支援：[Azure 文件](https://docs.microsoft.com/azure)
+- View full documentation: [README.md](README.md)
+- GitHub Issues: [Submit an issue](https://github.com/your-repo/issues)
+- Azure Support: [Azure Documentation](https://docs.microsoft.com/azure)
 
 ---
 
-**恭喜！** 🎉 您已成功部署 GitHub Self-hosted Runners！
+**Congratulations!** 🎉 You've successfully deployed GitHub Self-hosted Runners!

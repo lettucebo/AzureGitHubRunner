@@ -1,122 +1,126 @@
-# SSH Key 快速上手指南
+[繁體中文](SSH_QUICKSTART_zh-tw.md) | **English**
 
-> 📁 **原始碼位置**: `src/vm-runner/`
+---
 
-## 🚀 三步驟完成 SSH Key 設定
+# SSH Key Quick Start Guide
 
-### Step 1: 生成 SSH Key（第一次使用）
+> 📁 **Source Code Location**: `src/vm-runner/`
 
-開啟 PowerShell，複製並執行：
+## 🚀 Complete SSH Key Setup in Three Steps
+
+### Step 1: Generate SSH Key (First Time)
+
+Open PowerShell and run:
 
 ```powershell
-# 生成 SSH key（記得替換成您的 email）
+# Generate SSH key (remember to replace with your email)
 ssh-keygen -t rsa -b 4096 -C "your_email@example.com" -f "$env:USERPROFILE\.ssh\id_rsa"
 ```
 
-**執行過程：**
-1. 會詢問您兩次 passphrase（密碼）
-   - ✅ **建議設定**密碼保護私鑰
-   - 輸入時不會顯示字元（正常現象）
-   - 或直接按 Enter 跳過（不建議）
+**During execution:**
+1. You'll be asked twice for a passphrase (password)
+   - ✅ **Recommended** to set a password to protect the private key
+   - No characters will be displayed when typing (this is normal)
+   - Or press Enter to skip (not recommended)
 
-2. 完成後會顯示成功訊息
+2. Success message will be displayed upon completion
 
-### Step 2: 備份到 OneDrive
+### Step 2: Backup to OneDrive
 
-在專案根目錄執行備份腳本：
+Run the backup script from the project root directory:
 
 ```powershell
-# 從專案根目錄執行
+# Execute from project root directory
 .\src\common-scripts\Backup-SSHKey.ps1
 ```
 
-**腳本會自動：**
-- ✅ 複製 SSH key 到 OneDrive
-- ✅ 建立歷史備份（帶日期）
-- ✅ 產生說明檔案
-- ✅ 顯示公鑰預覽
+**The script automatically:**
+- ✅ Copies SSH key to OneDrive
+- ✅ Creates historical backup (with date)
+- ✅ Generates documentation file
+- ✅ Displays public key preview
 
-### Step 3: 將公鑰加入 Terraform
+### Step 3: Add Public Key to Terraform
 
 ```powershell
-# 複製公鑰到剪貼簿
+# Copy public key to clipboard
 Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | Set-Clipboard
 ```
 
-然後編輯 `src/vm-runner/terraform.tfvars`，貼上公鑰：
+Then edit `src/vm-runner/terraform.tfvars` and paste the public key:
 
 ```hcl
 # src/vm-runner/terraform.tfvars
-ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAA...貼上剛才複製的內容... your_email@example.com"
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAA...paste the content you just copied... your_email@example.com"
 ```
 
-✅ **完成！** 現在可以進入 `src/vm-runner` 目錄執行 `terraform apply` 部署 VM 了！
+✅ **Done!** You can now navigate to the `src/vm-runner` directory and run `terraform apply` to deploy the VM!
 
 ---
 
-## 📱 在其他電腦上使用（還原備份）
+## 📱 Using on Another Computer (Restore Backup)
 
-當您在新電腦上需要使用 SSH key：
+When you need to use the SSH key on a new computer:
 
 ```powershell
-# 從專案根目錄執行
+# Execute from project root directory
 .\src\common-scripts\Restore-SSHKey.ps1
 ```
 
-**腳本會自動：**
-- ✅ 從 OneDrive 複製 SSH key
-- ✅ 設定正確的檔案權限
-- ✅ 複製公鑰到剪貼簿
-- ✅ 顯示測試指令
+**The script automatically:**
+- ✅ Copies SSH key from OneDrive
+- ✅ Sets correct file permissions
+- ✅ Copies public key to clipboard
+- ✅ Displays test commands
 
 ---
 
-## 🔄 定期備份
+## 🔄 Regular Backups
 
-每次更新 SSH key 後，執行：
+After updating your SSH key, run:
 
 ```powershell
-# 從專案根目錄執行
+# Execute from project root directory
 .\src\common-scripts\Backup-SSHKey.ps1
 ```
 
-會自動建立新的歷史備份，不會覆蓋舊的。
+It will automatically create a new historical backup without overwriting the old one.
 
 ---
 
-## 📚 完整文檔
+## 📚 Complete Documentation
 
-- **詳細教學**: [SSH_KEY_GUIDE.md](SSH_KEY_GUIDE.md)
-- **備份腳本**: [Backup-SSHKey.ps1](../../src/common-scripts/Backup-SSHKey.ps1)
-- **還原腳本**: [Restore-SSHKey.ps1](../../src/common-scripts/Restore-SSHKey.ps1)
-
----
-
-## 🆘 常見問題
-
-**Q: 我忘記設 passphrase 了，怎麼辦？**  
-A: 重新執行 Step 1 生成新的 key，會覆蓋舊的。
-
-**Q: OneDrive 備份安全嗎？**  
-A: 只要您的 OneDrive 帳號有強密碼和雙重驗證就安全。更安全的方式是設定 passphrase。
-
-**Q: 可以在多台電腦同時使用同一個 SSH key 嗎？**  
-A: 可以！使用還原腳本在每台電腦上還原即可。
-
-**Q: 如何測試 SSH key 是否正常？**  
-A: 部署 VM 後，執行 `ssh azureuser@<VM-IP>` 測試連線。
+- **Detailed Tutorial**: [SSH_KEY_GUIDE.md](SSH_KEY_GUIDE.md)
+- **Backup Script**: [Backup-SSHKey.ps1](../../src/common-scripts/Backup-SSHKey.ps1)
+- **Restore Script**: [Restore-SSHKey.ps1](../../src/common-scripts/Restore-SSHKey.ps1)
 
 ---
 
-## ⚠️ 安全提醒
+## 🆘 Common Questions
 
-- ❌ **不要**分享私鑰 (id_rsa)
-- ❌ **不要**將私鑰上傳到 GitHub
-- ❌ **不要**用 Email 傳送私鑰
-- ✅ **要**定期備份
-- ✅ **要**使用 passphrase 保護
-- ✅ **要**確保 OneDrive 帳號安全
+**Q: I forgot to set a passphrase, what should I do?**  
+A: Re-run Step 1 to generate a new key, it will overwrite the old one.
+
+**Q: Is OneDrive backup secure?**  
+A: Yes, as long as your OneDrive account has a strong password and two-factor authentication. For extra security, set a passphrase.
+
+**Q: Can I use the same SSH key on multiple computers simultaneously?**  
+A: Yes! Use the restore script to restore it on each computer.
+
+**Q: How do I test if the SSH key is working properly?**  
+A: After deploying the VM, run `ssh azureuser@<VM-IP>` to test the connection.
 
 ---
 
-**準備好了嗎？** 從 Step 1 開始吧！🚀
+## ⚠️ Security Reminders
+
+- ❌ **Do NOT** share your private key (id_rsa)
+- ❌ **Do NOT** upload your private key to GitHub
+- ❌ **Do NOT** send your private key via email
+- ✅ **DO** backup regularly
+- ✅ **DO** use passphrase protection
+- ✅ **DO** ensure your OneDrive account is secure
+
+---
+
+**Ready to start?** Begin with Step 1! 🚀
