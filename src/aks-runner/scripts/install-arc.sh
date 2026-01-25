@@ -42,7 +42,7 @@ RUNNER_SCALE_SET_NAME="${RUNNER_SCALE_SET_NAME:-arc-runner-set}"
 ARC_NAMESPACE="${ARC_NAMESPACE:-arc-systems}"
 RUNNER_NAMESPACE="${RUNNER_NAMESPACE:-arc-runners}"
 MIN_RUNNERS="${MIN_RUNNERS:-0}"
-MAX_RUNNERS="${MAX_RUNNERS:-15}"
+MAX_RUNNERS="${MAX_RUNNERS:-45}"
 
 # 容器模式: "dind" (Docker-in-Docker) 或留空 (不需要 Docker)
 CONTAINER_MODE="${CONTAINER_MODE:-dind}"

@@ -237,7 +237,7 @@ kubectl get nodes
 # 設定環境變數
 $env:GITHUB_PAT = "ghp_your_token_here"                           # 您的 PAT
 $env:GITHUB_CONFIG_URL = "https://github.com/your-org/your-repo"  # 您的 repo URL
-$env:MAX_RUNNERS = "3"                                             # 最大 runner 數量
+$env:MAX_RUNNERS = "45"                                            # 最大 runner 數量 (3 節點 × 15)
 
 # 執行安裝腳本 (使用 Git Bash 或 WSL)
 bash scripts/install-arc.sh
