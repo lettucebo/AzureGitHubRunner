@@ -10,7 +10,7 @@
 #   --namespace arc-runners \
 #   --set githubConfigUrl="https://github.com/YOUR_ORG/YOUR_REPO" \
 #   --set githubConfigSecret="github-pat-secret" \
-#   --set minRunners=0 \
+#   --set minRunners=5 \
 #   --set maxRunners=3 \
 #   --set containerMode.type="dind" \
 #   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
@@ -65,7 +65,7 @@
 # githubConfigUrl: "https://github.com/your-org/your-repo"
 # githubConfigSecret: github-pat-secret
 #
-# minRunners: 0
+# minRunners: 5
 # maxRunners: 3
 #
 # containerMode:

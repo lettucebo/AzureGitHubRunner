@@ -39,6 +39,10 @@
     - [症狀](#症狀-5)
     - [解決方案](#解決方案-3)
   - [有用的診斷命令](#有用的診斷命令)
+  - [Runner 啟動太慢](#runner-啟動太慢)
+    - [症狀](#症狀-6)
+    - [原因](#原因-3)
+    - [解決方案](#解決方案-4)
 
 ---
 
@@ -295,6 +299,67 @@ kubectl create secret generic github-pat-secret `
 ```powershell
 kubectl rollout restart deployment -n arc-systems
 ```
+
+---
+
+## Runner 啟動太慢
+
+### 症狀
+
+每次觸發 GitHub Actions workflow 時，需要等待 3-5 分鐘才能開始執行作業，因為 Runner 需要從零開始啟動。
+
+### 原因
+
+預設配置中 `minRunners` 設定為 `0`，代表閒置時會將所有 Runner 縮減到零。當有新作業進來時，需要重新啟動 Pod，包含拉取 image、初始化容器等步驟，這會造成顯著的延遲。
+
+### 解決方案
+
+設定 `minRunners` 為至少 `5`，確保始終有足夠的 Runner 在線上待命：
+
+#### 方法 1: 使用 Helm 命令更新
+
+```powershell
+helm upgrade arc-runner-set `
+  --namespace arc-runners `
+  --reuse-values `
+  --set minRunners=5 `
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+```
+
+#### 方法 2: 使用 values 檔案
+
+編輯 `arc-runner-values.yaml`：
+
+```yaml
+minRunners: 5      # 至少保持 5 個 Runner 在線上
+maxRunners: 45     # 最大同時運行數量
+```
+
+然後更新：
+
+```powershell
+helm upgrade arc-runner-set `
+  --namespace arc-runners `
+  -f src/aks-runner/kubernetes/arc-runner-values.yaml `
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+```
+
+#### 驗證設定
+
+```powershell
+# 查看 Runner 數量
+kubectl get pods -n arc-runners
+
+# 確認配置值
+helm get values arc-runner-set -n arc-runners
+```
+
+#### 成本考量
+
+- ✅ **優點**: 作業立即執行，無需等待初始化
+- ✅ **優點**: 穩定的 CI/CD 流程體驗
+- 💰 **成本**: 5 個 Runner 會持續運行（使用 Spot VM 成本相對較低）
+- 💡 **建議**: 依照實際使用頻率調整 `minRunners` 數量
 
 ---
 

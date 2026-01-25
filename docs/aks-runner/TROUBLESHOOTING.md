@@ -39,6 +39,10 @@ Problems and solutions you may encounter during deployment.
     - [症狀](#症狀-5)
     - [解決方案](#解決方案-3)
   - [有用的診斷命令](#有用的診斷命令)
+  - [Runner Startup Too Slow](#runner-startup-too-slow)
+    - [Symptoms](#symptoms-6)
+    - [Cause](#cause-3)
+    - [Solution](#solution-4)
 
 ---
 
@@ -295,6 +299,67 @@ kubectl create secret generic github-pat-secret `
 ```powershell
 kubectl rollout restart deployment -n arc-systems
 ```
+
+---
+
+## Runner Startup Too Slow
+
+### Symptoms
+
+Every time a GitHub Actions workflow is triggered, it takes 3-5 minutes before the job starts executing because the Runner needs to start from scratch.
+
+### Cause
+
+The default configuration has `minRunners` set to `0`, which means all Runners scale down to zero when idle. When a new job arrives, the system needs to start a new Pod, including pulling images and initializing containers, causing significant delay.
+
+### Solution
+
+Set `minRunners` to at least `5` to ensure sufficient Runners are always online and ready:
+
+#### Method 1: Update via Helm command
+
+```powershell
+helm upgrade arc-runner-set `
+  --namespace arc-runners `
+  --reuse-values `
+  --set minRunners=5 `
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+```
+
+#### Method 2: Update via values file
+
+Edit `arc-runner-values.yaml`:
+
+```yaml
+minRunners: 5      # Keep at least 5 Runners online
+maxRunners: 45     # Maximum concurrent Runners
+```
+
+Then update:
+
+```powershell
+helm upgrade arc-runner-set `
+  --namespace arc-runners `
+  -f src/aks-runner/kubernetes/arc-runner-values.yaml `
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+```
+
+#### Verification
+
+```powershell
+# Check Runner count
+kubectl get pods -n arc-runners
+
+# Verify configuration
+helm get values arc-runner-set -n arc-runners
+```
+
+#### Cost Considerations
+
+- ✅ **Benefit**: Jobs execute immediately without initialization wait
+- ✅ **Benefit**: Consistent CI/CD workflow experience
+- 💰 **Cost**: 5 Runners will run continuously (relatively low cost with Spot VMs)
+- 💡 **Recommendation**: Adjust `minRunners` based on your actual usage frequency
 
 ---
 

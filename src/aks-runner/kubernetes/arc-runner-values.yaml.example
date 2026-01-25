@@ -16,7 +16,7 @@ githubConfigUrl: "https://github.com/YOUR_ORG/YOUR_REPO"
 githubConfigSecret: "github-pat-secret"
 
 # Runner 數量設定
-minRunners: 0      # 閒置時縮減到 0 節省成本
+minRunners: 5      # 至少保持 5 個 Runner 在線上，確保作業可立即執行
 maxRunners: 45     # 最大同時運行數量 (3 節點 × 每節點約 15 個 runner)
 
 # Runner Scale Set 名稱 (GitHub workflow 中的 runs-on 值)
