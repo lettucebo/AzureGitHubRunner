@@ -247,9 +247,13 @@ bash scripts/install-arc.sh
 
 ```powershell
 # 1. 安裝 ARC Controller
+# 注意: System Pool 有 CriticalAddonsOnly taint，必須添加 toleration
 helm upgrade --install arc `
   --namespace arc-systems `
   --create-namespace `
+  --set "tolerations[0].key=CriticalAddonsOnly" `
+  --set "tolerations[0].operator=Exists" `
+  --set "tolerations[0].effect=NoSchedule" `
   --wait `
   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
 
@@ -260,22 +264,22 @@ kubectl create secret generic github-pat-secret `
   --from-literal=github_token="$env:GITHUB_PAT" `
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 3. 安裝 Runner Scale Set (使用官方 image)
+# 3. 複製並編輯 values 檔案
+Copy-Item kubernetes/arc-runner-values.yaml.example -Destination arc-runner-values.yaml
+# 編輯 arc-runner-values.yaml 設定 githubConfigUrl
+
+# 4. 安裝 Runner Scale Set (使用官方 image)
+# 注意: 必須使用 values 檔案而非 --set，因為 listenerTemplate 需要完整配置
 helm upgrade --install arc-runner-set `
   --namespace arc-runners `
-  --set githubConfigUrl="$env:GITHUB_CONFIG_URL" `
-  --set githubConfigSecret="github-pat-secret" `
-  --set minRunners=0 `
-  --set maxRunners=3 `
-  --set containerMode.type="dind" `
-  --set "template.spec.nodeSelector.nodepool-type=runner" `
-  --set "template.spec.tolerations[0].key=kubernetes.azure.com/scalesetpriority" `
-  --set "template.spec.tolerations[0].operator=Equal" `
-  --set "template.spec.tolerations[0].value=spot" `
-  --set "template.spec.tolerations[0].effect=NoSchedule" `
+  -f arc-runner-values.yaml `
   --wait `
   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
 ```
+
+> ⚠️ **重要**: Listener Pod 需要 `listenerTemplate` 配置才能添加 toleration。
+> 使用 `--set listenerTemplate.spec.tolerations[0]...` 會失敗，因為 `listenerTemplate.spec.containers` 是必填欄位。
+> 必須使用 values 檔案 (`-f arc-runner-values.yaml`) 來提供完整配置。
 
 ### Step 6: 驗證安裝
 
@@ -321,6 +325,41 @@ jobs:
 ---
 
 ## 🔍 故障排除
+
+### ARC Controller Pod 處於 Pending 狀態
+
+System Pool 設有 `CriticalAddonsOnly=true:NoSchedule` taint，需要在安裝時添加 toleration：
+
+```powershell
+# 檢查 Controller Pod 狀態
+kubectl describe pod -n arc-systems -l app.kubernetes.io/name=gha-rs-controller
+
+# 重新安裝 Controller 並添加 toleration
+helm upgrade --install arc --namespace arc-systems `
+  --set "tolerations[0].key=CriticalAddonsOnly" `
+  --set "tolerations[0].operator=Exists" `
+  --set "tolerations[0].effect=NoSchedule" `
+  --wait `
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
+```
+
+### Listener Pod 處於 Pending 狀態
+
+Listener Pod 也需要 CriticalAddonsOnly toleration，但**必須使用 values 檔案**：
+
+```powershell
+# 檢查 Listener Pod 狀態
+kubectl describe pod -n arc-systems -l app.kubernetes.io/component=runner-scale-set-listener
+
+# 如果看到 "untolerated taint {CriticalAddonsOnly: true}"，需要重新安裝
+# ⚠️ 注意: 不能只用 --set，因為 listenerTemplate.spec.containers 是必填欄位
+
+# 使用 values 檔案重新安裝
+helm upgrade --install arc-runner-set --namespace arc-runners `
+  -f kubernetes/arc-runner-values.yaml.example `
+  --wait `
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+```
 
 ### Runner Pods 無法調度到 Spot VM Pool
 

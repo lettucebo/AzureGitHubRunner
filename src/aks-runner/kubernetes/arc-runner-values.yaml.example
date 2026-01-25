@@ -1,0 +1,92 @@
+# =============================================================================
+# ARC Runner Scale Set Helm Values 配置範例
+# =============================================================================
+#
+# 使用方式:
+#   1. 複製此檔案: cp arc-runner-values.yaml.example arc-runner-values.yaml
+#   2. 編輯 githubConfigUrl 為您的 repository 或 organization URL
+#   3. 安裝: helm upgrade --install arc-runner-set -n arc-runners \
+#            -f arc-runner-values.yaml \
+#            oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+#
+# =============================================================================
+
+# GitHub 配置 (必填)
+githubConfigUrl: "https://github.com/YOUR_ORG/YOUR_REPO"
+githubConfigSecret: "github-pat-secret"
+
+# Runner 數量設定
+minRunners: 0      # 閒置時縮減到 0 節省成本
+maxRunners: 3      # 最大同時運行數量
+
+# Runner Scale Set 名稱 (GitHub workflow 中的 runs-on 值)
+runnerScaleSetName: "arc-runner-set"
+
+# =============================================================================
+# Runner Pod 配置 (執行 GitHub Actions jobs 的 Pod)
+# 這些 Pod 會調度到 Spot VM Runner Pool
+# =============================================================================
+template:
+  spec:
+    # 指定在 runner node pool 執行
+    nodeSelector:
+      nodepool-type: runner
+    
+    # Spot VM 需要這個 toleration
+    tolerations:
+      - key: "kubernetes.azure.com/scalesetpriority"
+        operator: "Equal"
+        value: "spot"
+        effect: "NoSchedule"
+
+# =============================================================================
+# Listener Pod 配置 (接收 GitHub webhook 的 Pod)
+# 這個 Pod 會調度到 System Pool (長期運行)
+# =============================================================================
+# ⚠️ 重要: listenerTemplate 必須包含 containers 區塊
+# 如果只設定 tolerations 而沒有 containers，Helm 安裝會失敗
+# 錯誤訊息: "spec.listenerTemplate.spec.containers: Required value"
+listenerTemplate:
+  spec:
+    # containers 是必填欄位，即使只是空的資源配置
+    containers:
+      - name: listener
+        resources: {}
+    
+    # System Pool 有 CriticalAddonsOnly taint，需要此 toleration
+    tolerations:
+      - key: "CriticalAddonsOnly"
+        operator: "Exists"
+        effect: "NoSchedule"
+
+# =============================================================================
+# Docker-in-Docker 模式 (可選)
+# 如果您的 workflow 使用 container: 語法或 Docker actions，需要啟用
+# =============================================================================
+# containerMode:
+#   type: "dind"
+
+# =============================================================================
+# 進階配置 (可選)
+# =============================================================================
+
+# 自訂 runner image (預設使用 GitHub 官方 image)
+# template:
+#   spec:
+#     containers:
+#       - name: runner
+#         image: ghcr.io/actions/actions-runner:latest
+#         resources:
+#           limits:
+#             cpu: "2"
+#             memory: "4Gi"
+#           requests:
+#             cpu: "500m"
+#             memory: "1Gi"
+
+# 掛載額外的 volumes (例如: 快取)
+# template:
+#   spec:
+#     volumes:
+#       - name: work
+#         emptyDir: {}

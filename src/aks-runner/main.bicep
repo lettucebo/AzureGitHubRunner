@@ -25,7 +25,7 @@ targetScope = 'subscription'
   'staging'
   'prod'
 ])
-param environment string = 'dev'
+param environment string = 'prod'
 
 @description('專案名稱前綴')
 param projectName string = 'ghrunner'
@@ -33,8 +33,8 @@ param projectName string = 'ghrunner'
 @description('部署位置')
 param location string = 'eastasia'
 
-@description('Kubernetes 版本')
-param kubernetesVersion string = '1.29'
+@description('Kubernetes 版本。注意: 部分區域不支援較新版本 (如 East Asia 不支援 1.35+)，部署前請執行 az aks get-versions --location <location> 確認支援的版本')
+param kubernetesVersion string = '1.33'
 
 // System Pool 配置
 @description('System Pool VM 大小')
@@ -63,7 +63,7 @@ param runnerNodeMaxCount int = 3
 param enableMonitoring bool = true
 
 @description('是否建立 ACR')
-param enableAcr bool = true
+param enableAcr bool = false
 
 @description('Log 保留天數')
 param logRetentionDays int = 30
@@ -141,8 +141,8 @@ module aks 'modules/aks.bicep' = {
     runnerNodeMaxCount: runnerNodeMaxCount
     
     // Integrations
-    logAnalyticsWorkspaceId: enableMonitoring ? logAnalytics.outputs.workspaceId : ''
-    acrId: enableAcr ? acr.outputs.acrId : ''
+    logAnalyticsWorkspaceId: enableMonitoring && logAnalytics != null ? logAnalytics.outputs.workspaceId : ''
+    acrId: enableAcr && acr != null ? acr.outputs.acrId : ''
     
     tags: tags
   }
@@ -165,10 +165,10 @@ output aksClusterFqdn string = aks.outputs.clusterFqdn
 output aksConnectCommand string = aks.outputs.connectCommand
 
 @description('ACR Login Server')
-output acrLoginServer string = enableAcr ? acr.outputs.loginServer : 'N/A'
+output acrLoginServer string = enableAcr && acr != null ? acr.outputs.loginServer : 'N/A'
 
 @description('Log Analytics Workspace ID')
-output logWorkspaceId string = enableMonitoring ? logAnalytics.outputs.workspaceId : 'N/A'
+output logWorkspaceId string = enableMonitoring && logAnalytics != null ? logAnalytics.outputs.workspaceId : 'N/A'
 
 // ============================================================================
 // 部署後步驟提示
