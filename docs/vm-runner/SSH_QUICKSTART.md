@@ -1,5 +1,7 @@
 # SSH Key 快速上手指南
 
+> 📁 **原始碼位置**: `src/vm-runner/`
+
 ## 🚀 三步驟完成 SSH Key 設定
 
 ### Step 1: 生成 SSH Key（第一次使用）
@@ -21,11 +23,11 @@ ssh-keygen -t rsa -b 4096 -C "your_email@example.com" -f "$env:USERPROFILE\.ssh\
 
 ### Step 2: 備份到 OneDrive
 
-在專案目錄執行備份腳本：
+在專案根目錄執行備份腳本：
 
 ```powershell
-cd "c:\Users\tzyu\Downloads\20260123"
-.\Backup-SSHKey.ps1
+# 從專案根目錄執行
+.\src\common-scripts\Backup-SSHKey.ps1
 ```
 
 **腳本會自動：**
@@ -41,13 +43,14 @@ cd "c:\Users\tzyu\Downloads\20260123"
 Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | Set-Clipboard
 ```
 
-然後編輯 `terraform.tfvars`，貼上公鑰：
+然後編輯 `src/vm-runner/terraform.tfvars`，貼上公鑰：
 
 ```hcl
+# src/vm-runner/terraform.tfvars
 ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAA...貼上剛才複製的內容... your_email@example.com"
 ```
 
-✅ **完成！** 現在可以執行 `terraform apply` 部署 VM 了！
+✅ **完成！** 現在可以進入 `src/vm-runner` 目錄執行 `terraform apply` 部署 VM 了！
 
 ---
 
@@ -56,8 +59,8 @@ ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAA...貼上剛才複製的內容... yo
 當您在新電腦上需要使用 SSH key：
 
 ```powershell
-cd "c:\Users\tzyu\Downloads\20260123"
-.\Restore-SSHKey.ps1
+# 從專案根目錄執行
+.\src\common-scripts\Restore-SSHKey.ps1
 ```
 
 **腳本會自動：**
@@ -73,7 +76,8 @@ cd "c:\Users\tzyu\Downloads\20260123"
 每次更新 SSH key 後，執行：
 
 ```powershell
-.\Backup-SSHKey.ps1
+# 從專案根目錄執行
+.\src\common-scripts\Backup-SSHKey.ps1
 ```
 
 會自動建立新的歷史備份，不會覆蓋舊的。
@@ -83,8 +87,8 @@ cd "c:\Users\tzyu\Downloads\20260123"
 ## 📚 完整文檔
 
 - **詳細教學**: [SSH_KEY_GUIDE.md](SSH_KEY_GUIDE.md)
-- **備份腳本**: [Backup-SSHKey.ps1](Backup-SSHKey.ps1)
-- **還原腳本**: [Restore-SSHKey.ps1](Restore-SSHKey.ps1)
+- **備份腳本**: [Backup-SSHKey.ps1](../../src/common-scripts/Backup-SSHKey.ps1)
+- **還原腳本**: [Restore-SSHKey.ps1](../../src/common-scripts/Restore-SSHKey.ps1)
 
 ---
 

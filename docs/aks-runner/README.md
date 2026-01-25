@@ -117,8 +117,8 @@ helm version
 az login
 az account set --subscription "<your-subscription-id>"
 
-# 2. 進入 BICEP 目錄
-cd BICEP
+# 2. 進入 AKS Runner 目錄
+cd src/aks-runner
 
 # 3. 複製並編輯參數檔案
 Copy-Item main.bicepparam.example -Destination main.bicepparam
@@ -382,7 +382,7 @@ kubectl logs -n arc-runners -l app.kubernetes.io/component=runner-scale-set-list
 ## 📁 目錄結構
 
 ```
-BICEP/
+src/aks-runner/
 ├── main.bicep                    # 主部署檔案
 ├── main.bicepparam.example       # 參數範例
 ├── README.md                     # 本文件

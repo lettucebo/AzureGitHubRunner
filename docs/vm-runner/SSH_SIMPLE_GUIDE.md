@@ -1,5 +1,9 @@
 # SSH Key 簡易使用指南
 
+> 📂 **路徑說明**: 本文件說明如何為 VM Runner 設定 SSH Key。
+> - Terraform 設定檔位於：`src/vm-runner/`
+> - 備份腳本位於：`src/common-scripts/`
+
 ## 📦 備份 SSH Key（手動，只做一次）
 
 SSH key 已生成在：`C:\Users\tzyu\.ssh\`
@@ -27,7 +31,8 @@ explorer "$env:OneDrive\.ssh"
 **只需執行一個腳本：**
 
 ```powershell
-.\Import-SSHKey.ps1
+# 從專案根目錄執行
+.\src\common-scripts\Import-SSHKey.ps1
 ```
 
 就完成了！
@@ -42,7 +47,7 @@ explorer "$env:OneDrive\.ssh"
 Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | Set-Clipboard
 ```
 
-然後直接貼到 `terraform.tfvars` 的 `ssh_public_key` 欄位。
+然後直接貼到 `src/vm-runner/terraform.tfvars` 的 `ssh_public_key` 欄位。
 
 ### 方法 2: 直接查看
 
@@ -71,7 +76,7 @@ OneDrive\.ssh\
 ## ✅ 就這麼簡單！
 
 1. **第一次**：手動複製到 OneDrive（上面的指令）
-2. **新電腦**：執行 `Import-SSHKey.ps1`
-3. **使用**：複製公鑰到 terraform.tfvars
+2. **新電腦**：執行 `src/common-scripts/Import-SSHKey.ps1`
+3. **使用**：複製公鑰到 `src/vm-runner/terraform.tfvars`
 
 沒有複雜的備份流程，一切都很直覺！

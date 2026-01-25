@@ -1,5 +1,9 @@
 # SSH Key 完整使用指南
 
+> 📂 **路徑說明**: 本文件說明如何為 VM Runner 設定 SSH Key。
+> - Terraform 設定檔位於：`src/vm-runner/`
+> - 備份腳本位於：`src/common-scripts/`
+
 ## 📚 什麼是 SSH Key？
 
 SSH Key 是一對加密金鑰，用於安全地連線到遠端伺服器：
@@ -218,8 +222,13 @@ Write-Host "現在可以貼到 terraform.tfvars 中" -ForegroundColor Cyan
 
 ### 2. 編輯 terraform.tfvars：
 
+```powershell
+# 進入 VM Runner 目錄
+cd src/vm-runner
+```
+
 ```hcl
-# terraform.tfvars
+# src/vm-runner/terraform.tfvars
 
 # 貼上剛才複製的公鑰（整行，包含 ssh-rsa 開頭和 email 結尾）
 ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDxxxxxx...很長的字串...xxxxx your_email@example.com"
@@ -357,8 +366,8 @@ ssh-keygen -lf "$env:USERPROFILE\.ssh\id_rsa.pub"
 
 完成 SSH key 設定後：
 
-1. ✅ 將公鑰填入 `terraform.tfvars` 的 `ssh_public_key` 參數
-2. ✅ 執行 `terraform apply` 部署 VM
+1. ✅ 將公鑰填入 `src/vm-runner/terraform.tfvars` 的 `ssh_public_key` 參數
+2. ✅ 進入 `src/vm-runner` 目錄，執行 `terraform apply` 部署 VM
 3. ✅ 使用 `ssh azureuser@<VM-IP>` 連線測試
 4. ✅ 定期執行備份腳本
 

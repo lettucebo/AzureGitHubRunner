@@ -1,5 +1,9 @@
 # Azure VM for GitHub Self-hosted Runners - 快速開始指南
 
+> 📁 **原始碼位置**: `src/vm-runner/`
+>
+> 所有 Terraform 命令請在 `src/vm-runner/` 目錄下執行。
+
 ## 📋 前置需求
 
 在開始之前，請確保您已經：
@@ -10,6 +14,12 @@
 4. ✅ 擁有 GitHub 帳號並準備好 Personal Access Token
 
 ## 🚀 快速開始（5 分鐘部署）
+
+### 步驟 0: 進入專案目錄
+
+```bash
+cd src/vm-runner
+```
 
 ### 步驟 1: 準備 SSH 金鑰
 

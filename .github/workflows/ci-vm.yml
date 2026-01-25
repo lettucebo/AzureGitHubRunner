@@ -9,14 +9,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'TERRAFORM/**'
-      - 'scripts/**'
+      - 'src/vm-runner/**'
+      - 'src/common-scripts/**'
       - '.github/workflows/ci-vm.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'TERRAFORM/**'
-      - 'scripts/**'
+      - 'src/vm-runner/**'
+      - 'src/common-scripts/**'
   workflow_dispatch:
 
 jobs:
@@ -37,21 +37,21 @@ jobs:
       - name: Terraform Format Check
         run: |
           echo "🔍 Checking Terraform format..."
-          cd TERRAFORM
+          cd src/vm-runner
           terraform fmt -check -recursive
           echo "✅ Format check passed"
       
       - name: Terraform Init
         run: |
           echo "🔍 Initializing Terraform..."
-          cd TERRAFORM
+          cd src/vm-runner
           terraform init -backend=false
           echo "✅ Terraform initialized"
       
       - name: Terraform Validate
         run: |
           echo "🔍 Validating Terraform configuration..."
-          cd TERRAFORM
+          cd src/vm-runner
           terraform validate
           echo "✅ Terraform validation passed"
 
@@ -66,23 +66,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Check TERRAFORM Scripts
+      - name: Check VM Runner Scripts
         run: |
-          echo "🔍 Checking TERRAFORM shell scripts..."
+          echo "🔍 Checking VM runner shell scripts..."
           if command -v shellcheck &> /dev/null; then
-            shellcheck TERRAFORM/scripts/*.sh || true
+            shellcheck src/vm-runner/scripts/*.sh || true
           else
             echo "⚠️ shellcheck not installed, skipping"
           fi
           echo "✅ Shell script check completed"
       
-      - name: Check Root Scripts
+      - name: Check Common Scripts
         run: |
-          echo "🔍 Checking root scripts..."
+          echo "🔍 Checking common scripts..."
           if command -v shellcheck &> /dev/null; then
-            shellcheck scripts/*.sh 2>/dev/null || true
+            shellcheck src/common-scripts/*.sh 2>/dev/null || true
           fi
-          echo "✅ Root script check completed"
+          echo "✅ Common script check completed"
 
   # ============================================
   # YAML 驗證 (cloud-init)
@@ -99,10 +99,10 @@ jobs:
         run: |
           echo "🔍 Checking cloud-init configuration..."
           if command -v yamllint &> /dev/null; then
-            yamllint -d relaxed TERRAFORM/scripts/cloud-init.yml || true
+            yamllint -d relaxed src/vm-runner/scripts/cloud-init.yml || true
           else
             echo "⚠️ yamllint not installed, basic syntax check..."
-            python3 -c "import yaml; yaml.safe_load(open('TERRAFORM/scripts/cloud-init.yml'))" && echo "✅ YAML syntax valid"
+            python3 -c "import yaml; yaml.safe_load(open('src/vm-runner/scripts/cloud-init.yml'))" && echo "✅ YAML syntax valid"
           fi
 
   # ============================================

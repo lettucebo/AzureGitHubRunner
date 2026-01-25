@@ -10,12 +10,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'BICEP/**'
+      - 'src/aks-runner/**'
       - '.github/workflows/ci-aks.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'BICEP/**'
+      - 'src/aks-runner/**'
   workflow_dispatch:
 
 jobs:
@@ -41,13 +41,13 @@ jobs:
       - name: Bicep Build (Syntax Check)
         run: |
           echo "🔍 Validating Bicep syntax..."
-          az bicep build --file BICEP/main.bicep --stdout > /dev/null
+          az bicep build --file src/aks-runner/main.bicep --stdout > /dev/null
           echo "✅ Bicep syntax is valid"
       
       - name: Bicep Lint (Best Practices)
         run: |
           echo "🔍 Running Bicep linter..."
-          az bicep lint --file BICEP/main.bicep
+          az bicep lint --file src/aks-runner/main.bicep
           echo "✅ Bicep linting passed"
 
   # ============================================
@@ -69,7 +69,7 @@ jobs:
       - name: Check Shell Scripts
         run: |
           echo "🔍 Checking shell scripts..."
-          shellcheck BICEP/scripts/*.sh || true
+          shellcheck src/aks-runner/scripts/*.sh || true
           echo "✅ Shell script check completed"
 
   # ============================================
@@ -90,7 +90,7 @@ jobs:
       - name: Lint Kubernetes YAML
         run: |
           echo "🔍 Checking Kubernetes manifests..."
-          yamllint -d relaxed BICEP/kubernetes/*.yaml || true
+          yamllint -d relaxed src/aks-runner/kubernetes/*.yaml || true
           echo "✅ YAML check completed"
 
   # ============================================

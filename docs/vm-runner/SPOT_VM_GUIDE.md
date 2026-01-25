@@ -1,5 +1,8 @@
 # Azure Spot VM 使用指南
 
+> 📂 **路徑說明**: 本文件說明 VM Runner 的 Spot VM 設定。
+> - Terraform 設定檔位於：`src/vm-runner/`
+
 ## 🎯 什麼是 Azure Spot VM？
 
 Azure Spot VM 讓您以**大幅折扣**（通常 70-90% off）使用 Azure 的剩餘運算容量。當 Azure 需要容量時，會回收這些 VM。
