@@ -24,9 +24,7 @@ packages:
   - docker.io
   - docker-compose
 
-  # .NET SDK (for Azure DevOps agent)
-  - dotnet-sdk-8.0
-
+  # .NET SDK will be installed in runcmd after adding Microsoft repository
   # Node.js and npm (will be installed via separate script)
   - ca-certificates
   - gnupg
@@ -44,15 +42,26 @@ write_files:
     permissions: "0755"
     content: |
       #!/bin/bash
+      set -e  # Exit on error
+
       export AZURE_DEVOPS_URL="${azure_devops_url}"
       export AZURE_DEVOPS_TOKEN="${azure_devops_token}"
       export AZURE_DEVOPS_POOL_NAME="${azure_devops_pool_name}"
       export AGENT_COUNT=${runner_count}
 
-      # Download and run the agent setup script
-      curl -fsSL https://raw.githubusercontent.com/lettucebo/AzureGitHubRunner/main/src/azure-devops/vm-runner/scripts/setup-agents.sh -o /tmp/setup-agents.sh
+      # Download and run the agent setup script with error handling
+      echo "Downloading Azure DevOps agent setup script..."
+      if ! curl -fsSL https://raw.githubusercontent.com/lettucebo/AzureGitHubRunner/main/src/azure-devops/vm-runner/scripts/setup-agents.sh -o /tmp/setup-agents.sh; then
+          echo "ERROR: Failed to download setup-agents.sh from GitHub" >&2
+          echo "Please check network connectivity and GitHub availability" >&2
+          exit 1
+      fi
+
       chmod +x /tmp/setup-agents.sh
       /tmp/setup-agents.sh
+
+      # Cleanup sensitive data immediately
+      rm -f /tmp/setup-azdevops-agents.sh
 
   # Docker daemon configuration
   - path: /etc/docker/daemon.json
@@ -67,6 +76,19 @@ write_files:
       }
 
 runcmd:
+  # Add Microsoft package repository first (required for .NET SDK and PowerShell)
+  - |
+    wget -q https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb
+    dpkg -i /tmp/packages-microsoft-prod.deb
+    apt-get update
+    rm -f /tmp/packages-microsoft-prod.deb
+
+  # Install .NET SDK (required for Azure DevOps agent)
+  - apt-get install -y dotnet-sdk-8.0
+
+  # Install PowerShell
+  - apt-get install -y powershell
+
   # Install Node.js LTS (via NodeSource)
   - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
   - apt-get install -y nodejs
@@ -81,18 +103,9 @@ runcmd:
   # Install Azure CLI
   - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
-  # Install PowerShell
-  - |
-    wget -q https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb
-    dpkg -i packages-microsoft-prod.deb
-    apt-get update
-    apt-get install -y powershell
-    rm packages-microsoft-prod.deb
-
   # Setup Azure DevOps agents
   - /tmp/setup-azdevops-agents.sh
 
-  # Cleanup
-  - rm -f /tmp/setup-azdevops-agents.sh
+  # Cleanup is now handled within setup-azdevops-agents.sh
 
 final_message: "Azure DevOps Pipeline Agent VM is ready! Setup completed in $UPTIME seconds."
