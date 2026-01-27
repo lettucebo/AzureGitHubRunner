@@ -1,0 +1,9 @@
+---
+# Namespace for Azure DevOps Agents
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: azdevops-agents
+  labels:
+    name: azdevops-agents
+    purpose: ci-cd

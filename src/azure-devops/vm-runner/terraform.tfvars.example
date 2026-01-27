@@ -1,0 +1,74 @@
+# ============================================
+# Required Variables
+# ============================================
+
+resource_group_name = "AzureDevOps-Runners"
+location            = "eastasia"
+prefix              = "ado-runner"
+
+# ============================================
+# VM Configuration
+# ============================================
+
+vm_size        = "Standard_D4s_v5"
+os_disk_type   = "Premium_LRS"
+os_disk_size_gb = 128
+
+# ============================================
+# SSH Configuration
+# ============================================
+
+admin_username = "azureuser"
+
+# SSH public key - 請替換為您的 SSH 公鑰
+# 產生方式: ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQD... your-public-key-here"
+
+# 允許 SSH 連線的來源 IP
+# "*" = 允許所有來源（不建議用於正式環境）
+# "1.2.3.4/32" = 只允許特定 IP
+ssh_source_address_prefix = "*"
+
+# ============================================
+# Spot Instance Configuration
+# ============================================
+
+# 使用 Spot Instance 可節省 70-90% 成本
+# 注意: Spot VM 可能會被 Azure 回收
+use_spot_instance = true
+
+# ============================================
+# Azure DevOps Configuration
+# ============================================
+
+# Azure DevOps 組織 URL
+# 格式: https://dev.azure.com/your-organization
+azure_devops_url = "https://dev.azure.com/your-organization"
+
+# Azure DevOps Personal Access Token (PAT)
+# 需要的權限: Agent Pools (Read & manage)
+# 建立方式: https://dev.azure.com/your-org/_usersSettings/tokens
+azure_devops_token = "your-pat-token-here"
+
+# Azure DevOps Agent Pool 名稱
+# 如果 pool 不存在，需要先在 Azure DevOps 中建立
+azure_devops_pool_name = "Default"
+
+# ============================================
+# Agent Configuration
+# ============================================
+
+# 要部署的 Agent 數量（在同一台 VM 上）
+# 建議: 根據 VM 規格調整，D4s_v5 (4 vCPU) 建議 2-4 個 agents
+runner_count = 3
+
+# ============================================
+# Tags
+# ============================================
+
+tags = {
+  project     = "azure-devops-runner"
+  environment = "production"
+  managed_by  = "terraform"
+  cost_center = "devops"
+}

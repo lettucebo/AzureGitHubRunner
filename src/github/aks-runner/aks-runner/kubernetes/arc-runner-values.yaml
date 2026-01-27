@@ -1,0 +1,44 @@
+# =============================================================================
+# ARC Runner Scale Set Helm Values 配置
+# =============================================================================
+
+# GitHub 配置
+githubConfigUrl: "https://github.com/lettucebo/Mone"
+githubConfigSecret: "github-pat-secret"
+
+# Runner 數量設定
+minRunners: 5 # 至少保持 5 個 Runner 在線上，確保作業可立即執行
+maxRunners: 45 # 最大同時運行數量
+
+# Runner Scale Set 名稱
+runnerScaleSetName: "arc-runner-set"
+
+# =============================================================================
+# Runner Pod 配置 (執行 GitHub Actions jobs 的 Pod)
+# =============================================================================
+template:
+  spec:
+    # Spot VM 需要這個 toleration
+    tolerations:
+      - key: "kubernetes.azure.com/scalesetpriority"
+        operator: "Equal"
+        value: "spot"
+        effect: "NoSchedule"
+
+# =============================================================================
+# Listener Pod 配置 (接收 GitHub webhook 的 Pod)
+# =============================================================================
+listenerTemplate:
+  spec:
+    containers:
+      - name: listener
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+
+    # System Pool 有 CriticalAddonsOnly taint
+    tolerations:
+      - key: "CriticalAddonsOnly"
+        operator: "Exists"
+        effect: "NoSchedule"

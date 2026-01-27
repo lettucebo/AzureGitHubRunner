@@ -1,0 +1,49 @@
+using './main.bicep'
+
+// ============================================================================
+// Environment Configuration
+// ============================================================================
+
+param environment = 'prod'
+param projectName = 'adoagent'
+param location = 'eastasia'
+
+// ============================================================================
+// Kubernetes Configuration
+// ============================================================================
+
+param kubernetesVersion = '1.33'
+
+// ============================================================================
+// System Node Pool Configuration
+// ============================================================================
+
+param systemNodeVmSize = 'Standard_B2s'
+param systemNodeCount = 1
+
+// ============================================================================
+// Agent Node Pool Configuration (Spot VM)
+// ============================================================================
+
+param agentNodeVmSize = 'Standard_D4s_v3'
+param agentNodeMinCount = 0
+param agentNodeMaxCount = 5
+
+// ============================================================================
+// Optional Features
+// ============================================================================
+
+param enableMonitoring = true
+param enableAcr = false
+param logRetentionDays = 30
+
+// ============================================================================
+// Tags
+// ============================================================================
+
+param tags = {
+  project: 'azure-devops-agent'
+  environment: 'production'
+  managedBy: 'bicep'
+  costCenter: 'devops'
+}

@@ -1,0 +1,104 @@
+# Azure DevOps Agent Configuration for Kubernetes
+# This file contains the configuration for deploying Azure DevOps agents using KEDA
+
+# ============================================
+# Azure DevOps Configuration
+# ============================================
+
+# Your Azure DevOps organization URL
+# Format: https://dev.azure.com/your-organization
+azureDevOps:
+  url: "https://dev.azure.com/your-organization"
+  
+  # Azure DevOps PAT (Personal Access Token)
+  # Required permissions: Agent Pools (Read & manage)
+  # Create at: https://dev.azure.com/your-org/_usersSettings/tokens
+  token: "your-pat-token-here"
+  
+  # Agent pool name where agents will be registered
+  poolName: "Default"
+
+# ============================================
+# Agent Configuration
+# ============================================
+
+agent:
+  # Number of agents to deploy initially
+  # KEDA will scale this based on pending jobs
+  replicaCount: 1
+  
+  # Agent name prefix
+  namePrefix: "aks-agent"
+  
+  # Container image for Azure DevOps agent
+  # Using Microsoft's official image
+  image:
+    repository: "mcr.microsoft.com/azure-pipelines/vsts-agent"
+    tag: "ubuntu-22.04"
+    pullPolicy: "IfNotPresent"
+  
+  # Resource requests and limits
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  
+  # Node selector for agent pods
+  # This ensures agents run on the spot instance pool
+  nodeSelector:
+    workload: "agent"
+    pool: "spot"
+  
+  # Tolerations for spot instances
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"
+
+# ============================================
+# KEDA Autoscaling Configuration
+# ============================================
+
+keda:
+  # Enable KEDA autoscaling
+  enabled: true
+  
+  # Minimum number of agent replicas
+  minReplicas: 0
+  
+  # Maximum number of agent replicas
+  maxReplicas: 10
+  
+  # Polling interval in seconds
+  pollingInterval: 30
+  
+  # Cooldown period in seconds after scaling
+  cooldownPeriod: 300
+  
+  # Azure Pipelines scaler configuration
+  scaler:
+    # Pool ID (will be auto-discovered if not set)
+    # You can find this in Azure DevOps: Organization Settings > Agent pools
+    poolID: ""
+    
+    # Target number of pending jobs per agent
+    targetPipelinesQueueLength: "1"
+
+# ============================================
+# Service Account
+# ============================================
+
+serviceAccount:
+  # Create a service account for the agents
+  create: true
+  name: "azdevops-agent"
+
+# ============================================
+# Namespace
+# ============================================
+
+namespace: "azdevops-agents"

@@ -1,0 +1,164 @@
+---
+# ConfigMap for Azure DevOps Agent Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: azdevops-agent-config
+  namespace: azdevops-agents
+data:
+  AZP_URL: "https://dev.azure.com/your-organization"
+  AZP_POOL: "Default"
+  AZP_AGENT_NAME: "aks-agent"
+
+---
+# Secret for Azure DevOps PAT Token
+apiVersion: v1
+kind: Secret
+metadata:
+  name: azdevops-agent-secret
+  namespace: azdevops-agents
+type: Opaque
+stringData:
+  AZP_TOKEN: "your-pat-token-here"
+
+---
+# ServiceAccount for Azure DevOps Agents
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: azdevops-agent
+  namespace: azdevops-agents
+
+---
+# Deployment for Azure DevOps Agents
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azdevops-agent
+  namespace: azdevops-agents
+  labels:
+    app: azdevops-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: azdevops-agent
+  template:
+    metadata:
+      labels:
+        app: azdevops-agent
+    spec:
+      serviceAccountName: azdevops-agent
+      
+      # Node selector - deploy to agent pool (spot instances)
+      nodeSelector:
+        workload: "agent"
+        pool: "spot"
+      
+      # Tolerations for spot instances
+      tolerations:
+        - key: "kubernetes.azure.com/scalesetpriority"
+          operator: "Equal"
+          value: "spot"
+          effect: "NoSchedule"
+      
+      containers:
+        - name: agent
+          image: mcr.microsoft.com/azure-pipelines/vsts-agent:ubuntu-22.04
+          
+          env:
+            - name: AZP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: azdevops-agent-config
+                  key: AZP_URL
+            
+            - name: AZP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: azdevops-agent-secret
+                  key: AZP_TOKEN
+            
+            - name: AZP_POOL
+              valueFrom:
+                configMapKeyRef:
+                  name: azdevops-agent-config
+                  key: AZP_POOL
+            
+            - name: AZP_AGENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+      
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+
+---
+# KEDA ScaledObject for autoscaling based on Azure Pipelines queue
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: azdevops-agent-scaler
+  namespace: azdevops-agents
+spec:
+  scaleTargetRef:
+    name: azdevops-agent
+  
+  # Minimum number of replicas (0 = scale to zero when no jobs)
+  minReplicaCount: 0
+  
+  # Maximum number of replicas
+  maxReplicaCount: 10
+  
+  # Polling interval (seconds)
+  pollingInterval: 30
+  
+  # Cooldown period after scaling (seconds)
+  cooldownPeriod: 300
+  
+  triggers:
+    - type: azure-pipelines
+      metadata:
+        # Pool ID - find this in Azure DevOps: Organization Settings > Agent pools
+        # If not specified, KEDA will try to auto-discover
+        poolID: ""
+        
+        # Organization URL
+        organizationURLFromEnv: "AZP_URL"
+        
+        # Pool name
+        poolName: "Default"
+        
+        # Target number of pending jobs per replica
+        targetPipelinesQueueLength: "1"
+      
+      authenticationRef:
+        name: azure-pipelines-auth
+
+---
+# TriggerAuthentication for KEDA to access Azure DevOps
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: azure-pipelines-auth
+  namespace: azdevops-agents
+spec:
+  secretTargetRef:
+    - parameter: personalAccessToken
+      name: azdevops-agent-secret
+      key: AZP_TOKEN

@@ -1,0 +1,98 @@
+#cloud-config
+
+# Azure DevOps Pipeline Agent - Cloud-Init Configuration
+# This configuration prepares the VM and sets up Azure DevOps agents
+
+package_update: true
+package_upgrade: true
+
+packages:
+  # Essential tools
+  - curl
+  - wget
+  - git
+  - jq
+  - unzip
+  - tar
+  
+  # Build tools
+  - build-essential
+  - libssl-dev
+  - libffi-dev
+  
+  # Docker
+  - docker.io
+  - docker-compose
+  
+  # .NET SDK (for Azure DevOps agent)
+  - dotnet-sdk-8.0
+  
+  # Node.js and npm (will be installed via separate script)
+  - ca-certificates
+  - gnupg
+
+# System users
+users:
+  - name: azdevops
+    groups: docker
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+
+write_files:
+  # Agent setup script
+  - path: /tmp/setup-azdevops-agents.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      export AZURE_DEVOPS_URL="${azure_devops_url}"
+      export AZURE_DEVOPS_TOKEN="${azure_devops_token}"
+      export AZURE_DEVOPS_POOL_NAME="${azure_devops_pool_name}"
+      export AGENT_COUNT=${runner_count}
+      
+      # Download and run the agent setup script
+      curl -fsSL https://raw.githubusercontent.com/lettucebo/AzureGitHubRunner/main/src/azure-devops/vm-runner/scripts/setup-agents.sh -o /tmp/setup-agents.sh
+      chmod +x /tmp/setup-agents.sh
+      /tmp/setup-agents.sh
+  
+  # Docker daemon configuration
+  - path: /etc/docker/daemon.json
+    permissions: '0644'
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+
+runcmd:
+  # Install Node.js LTS (via NodeSource)
+  - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+  - apt-get install -y nodejs
+  
+  # Start Docker service
+  - systemctl enable docker
+  - systemctl start docker
+  
+  # Add azdevops user to docker group
+  - usermod -aG docker azdevops
+  
+  # Install Azure CLI
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  
+  # Install PowerShell
+  - |
+    wget -q https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb
+    dpkg -i packages-microsoft-prod.deb
+    apt-get update
+    apt-get install -y powershell
+    rm packages-microsoft-prod.deb
+  
+  # Setup Azure DevOps agents
+  - /tmp/setup-azdevops-agents.sh
+  
+  # Cleanup
+  - rm -f /tmp/setup-azdevops-agents.sh
+
+final_message: "Azure DevOps Pipeline Agent VM is ready! Setup completed in $UPTIME seconds."
