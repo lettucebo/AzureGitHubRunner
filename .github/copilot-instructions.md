@@ -9,6 +9,10 @@ IaC project deploying GitHub Actions / Azure DevOps self-hosted runners on Azure
 | **GitHub** | `src/github/vm-runner/` | `src/github/aks-runner/` (ARC) |
 | **Azure DevOps** | `src/azure-devops/vm-runner/` | `src/azure-devops/aks-runner/` (KEDA) |
 
+Additional utilities under `src/`:
+- `src/functions/start-aks/` — Azure Function (Flex Consumption) for scheduled AKS cluster auto-start
+- `src/common-scripts/` — PowerShell scripts for SSH key management
+
 Primary use case: **GitHub Copilot Coding Agent** support via AKS runners.
 
 ## Quick Reference
@@ -186,5 +190,6 @@ Detailed guidelines in `.github/instructions/`:
 | GitHub VM runner | `docs/github/vm-runner/` (6 guides) |
 | Azure DevOps AKS | `src/azure-devops/aks-runner/README.md` |
 | Azure DevOps VM | `src/azure-devops/vm-runner/README.md` |
+| Start AKS Function | `src/functions/start-aks/README.md` |
 | Troubleshooting | `docs/github/aks-runner/TROUBLESHOOTING.md` |
 | SSH key management | `src/common-scripts/*.ps1` |

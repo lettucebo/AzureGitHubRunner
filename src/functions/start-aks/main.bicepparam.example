@@ -1,0 +1,25 @@
+using 'main.bicep'
+
+param projectName = 'startaks'
+param environment = 'prod'
+param location = 'eastasia'
+
+param aksTargets = [
+  {
+    subscriptionId: '00000000-0000-0000-0000-000000000000'
+    resourceGroup: 'rg-ghrunner-prod'
+    name: 'aks-ghrunner-prod'
+  }
+  // 可新增更多叢集
+  // {
+  //   subscriptionId: '00000000-0000-0000-0000-000000000000'
+  //   resourceGroup: 'rg-devops-agent-prod'
+  //   name: 'aks-devops-agent-prod'
+  // }
+]
+
+param tags = {
+  project: 'start-aks'
+  environment: 'prod'
+  managedBy: 'bicep'
+}

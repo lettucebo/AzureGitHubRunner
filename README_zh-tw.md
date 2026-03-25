@@ -136,6 +136,8 @@ src/azure-devops/aks-runner/  # Bicep 基礎設施
 │   ├── azure-devops/               # Azure DevOps 解決方案
 │   │   ├── vm-runner/              # Terraform VM agent
 │   │   └── aks-runner/             # Bicep AKS agent (KEDA)
+│   ├── functions/                  # 工具型 Azure Functions
+│   │   └── start-aks/              # 定時啟動 AKS (Flex Consumption)
 │   └── common-scripts/             # 共用工具腳本
 └── docs/
     ├── github/                     # GitHub 解決方案文件

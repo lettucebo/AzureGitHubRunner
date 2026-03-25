@@ -1,0 +1,23 @@
+{
+  "name": "start-aks",
+  "version": "1.0.0",
+  "description": "定時啟動 AKS 叢集的 Azure Function",
+  "main": "dist/src/functions/*.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "clean": "rimraf dist",
+    "prestart": "npm run clean && npm run build",
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.6.0",
+    "@azure/identity": "^4.6.0",
+    "@azure/arm-containerservice": "^21.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "rimraf": "^6.0.0"
+  }
+}

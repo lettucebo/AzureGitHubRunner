@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "WEBSITE_TIME_ZONE": "Asia/Taipei",
+    "AKS_CLUSTERS": "[{\"subscriptionId\":\"your-subscription-id\",\"resourceGroup\":\"rg-ghrunner-prod\",\"name\":\"aks-ghrunner-prod\"}]"
+  }
+}

@@ -28,7 +28,7 @@ applyTo: "**"
 ✅ 正確：`feat: 新增自然語言輸入記帳功能`
 
 ## 語言
-- 使用**繁體中文**撰寫 commit message
+- 使用**英文**撰寫 commit message
 - 技術術語可維持英文 (如 API, Vue, TypeScript)
 
 ## 範例

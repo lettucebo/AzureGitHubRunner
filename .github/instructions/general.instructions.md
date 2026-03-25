@@ -14,6 +14,10 @@ applyTo: "**"
 3. **Azure DevOps VM Agent** (`src/azure-devops/vm-runner/`) - Terraform + VM  
 4. **Azure DevOps AKS Agent** (`src/azure-devops/aks-runner/`) - Bicep + AKS + KEDA
 
+### 輔助工具
+
+- **Start AKS Function** (`src/functions/start-aks/`) - Azure Function (Flex Consumption) 定時啟動 AKS 叢集
+
 ### 技術堆疊對照
 
 | 平台 | VM 方案 | AKS 方案 |
