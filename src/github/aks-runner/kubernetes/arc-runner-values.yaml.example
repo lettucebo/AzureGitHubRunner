@@ -16,7 +16,7 @@ githubConfigUrl: "https://github.com/YOUR_ORG/YOUR_REPO"
 githubConfigSecret: "github-pat-secret"
 
 # Runner 數量設定
-minRunners: 5      # 至少保持 5 個 Runner 在線上，確保作業可立即執行
+minRunners: 0      # 閒置時縮減到 0，有作業時自動建立 Runner
 maxRunners: 45     # 最大同時運行數量 (3 節點 × 每節點約 15 個 runner)
 
 # Runner Scale Set 名稱 (GitHub workflow 中的 runs-on 值)
@@ -40,6 +40,12 @@ template:
         effect: "NoSchedule"
 
 # =============================================================================
+# Docker-in-Docker 模式 (支援 container jobs 與 Docker actions)
+# =============================================================================
+containerMode:
+  type: "dind"
+
+# =============================================================================
 # Listener Pod 配置 (接收 GitHub webhook 的 Pod)
 # 這個 Pod 會調度到 System Pool (長期運行)
 # =============================================================================
@@ -48,23 +54,22 @@ template:
 # 錯誤訊息: "spec.listenerTemplate.spec.containers: Required value"
 listenerTemplate:
   spec:
-    # containers 是必填欄位，即使只是空的資源配置
+    # containers 是必填欄位，設定 requests = limits 確保 Guaranteed QoS
     containers:
       - name: listener
-        resources: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
     
     # System Pool 有 CriticalAddonsOnly taint，需要此 toleration
     tolerations:
       - key: "CriticalAddonsOnly"
         operator: "Exists"
         effect: "NoSchedule"
-
-# =============================================================================
-# Docker-in-Docker 模式 (可選)
-# 如果您的 workflow 使用 container: 語法或 Docker actions，需要啟用
-# =============================================================================
-# containerMode:
-#   type: "dind"
 
 # =============================================================================
 # 進階配置 (可選)

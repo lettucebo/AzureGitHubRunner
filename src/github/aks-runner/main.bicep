@@ -55,8 +55,8 @@ param runnerNodeMinCount int = 0
 
 @description('Runner Pool 最大節點數，每個節點可運行多個 Runner Pod')
 @minValue(1)
-@maxValue(3)
-param runnerNodeMaxCount int = 3
+@maxValue(10)
+param runnerNodeMaxCount int = 5
 
 // 可選功能
 @description('是否啟用 Container Insights 監控')

@@ -283,7 +283,7 @@ show_help() {
     echo "  GITHUB_PAT           GitHub Personal Access Token (必填)"
     echo "  RUNNER_SCALE_SET_NAME  Runner 名稱 (預設: arc-runner-set)"
     echo "  MIN_RUNNERS          最小 runner 數量 (預設: 0)"
-    echo "  MAX_RUNNERS          最大 runner 數量 (預設: 3)"
+    echo "  MAX_RUNNERS          最大 runner 數量 (預設: 45)"
     echo "  CONTAINER_MODE       容器模式: dind 或留空 (預設: dind)"
     echo ""
 }

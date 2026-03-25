@@ -67,6 +67,8 @@ resource aks 'Microsoft.ContainerService/managedClusters@2024-01-01' = {
     enableRBAC: true
     
     // Network 配置
+    // 注意: networkPlugin/networkPolicy 為叢集建立時的不可變屬性
+    // 新建叢集建議使用 networkPluginMode: 'overlay' 並移除 networkPolicy 以獲得更好效能
     networkProfile: {
       networkPlugin: 'azure'
       networkPolicy: 'azure'
@@ -134,6 +136,7 @@ resource runnerNodePool 'Microsoft.ContainerService/managedClusters/agentPools@2
     enableAutoScaling: true
     minCount: runnerNodeMinCount
     maxCount: runnerNodeMaxCount
+    scaleDownMode: 'Deallocate'
     
     type: 'VirtualMachineScaleSets'
     availabilityZones: []

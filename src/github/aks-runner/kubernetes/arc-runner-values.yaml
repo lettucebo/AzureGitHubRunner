@@ -3,11 +3,11 @@
 # =============================================================================
 
 # GitHub 配置
-githubConfigUrl: "https://github.com/lettucebo/Mone"
+githubConfigUrl: "https://github.com/MoneyForge"
 githubConfigSecret: "github-pat-secret"
 
 # Runner 數量設定
-minRunners: 5 # 至少保持 5 個 Runner 在線上，確保作業可立即執行
+minRunners: 0 # 閒置時縮減到 0，有作業時自動建立 Runner
 maxRunners: 45 # 最大同時運行數量
 
 # Runner Scale Set 名稱
@@ -18,12 +18,22 @@ runnerScaleSetName: "arc-runner-set"
 # =============================================================================
 template:
   spec:
+    # 確保 Runner 只跑在 Runner Pool
+    nodeSelector:
+      nodepool-type: runner
+
     # Spot VM 需要這個 toleration
     tolerations:
       - key: "kubernetes.azure.com/scalesetpriority"
         operator: "Equal"
         value: "spot"
         effect: "NoSchedule"
+
+# =============================================================================
+# Docker-in-Docker 模式 (支援 container jobs 與 Docker actions)
+# =============================================================================
+containerMode:
+  type: "dind"
 
 # =============================================================================
 # Listener Pod 配置 (接收 GitHub webhook 的 Pod)
@@ -33,6 +43,9 @@ listenerTemplate:
     containers:
       - name: listener
         resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
           limits:
             cpu: 100m
             memory: 128Mi
