@@ -1,7 +1,7 @@
 # SSH Key 還原腳本
 # 用途: 從 OneDrive 還原 SSH key 到新電腦
 
-$BackupPath = "$env:OneDrive\SSH-Keys-Backup"
+$BackupPath = "$env:OneDrive\Recovery\SSHKeyBackup"
 $DestPath = "$env:USERPROFILE\.ssh"
 
 Write-Host "========================================" -ForegroundColor Cyan
