@@ -50,6 +50,47 @@ shellcheck scripts/*.sh
 
 - **System Pool**: 1× B2s (fixed), `CriticalAddonsOnly` taint — hosts K8s system + controller
 - **Runner Pool**: 0–10× D4s_v3 Spot VMs (autoscaling), `spot:NoSchedule` taint — hosts runner workloads
+- **scaleDownMode**: `Deallocate` — preserves OS disk cache for faster scale-up
+- **Network**: Azure CNI Overlay (`networkPluginMode: 'overlay'`), no Network Policy — reduces overhead
+
+### ARC Runner Configuration
+
+- **githubConfigUrl**: Organization-level (`https://github.com/MoneyForge`) — shared across all repos
+- **minRunners**: `0` — scale from zero on demand, no idle runners
+- **maxRunners**: `45` — burst capacity
+- **containerMode**: `dind` (Docker-in-Docker) — supports container jobs
+- **Runner Pod**: Must have `nodeSelector: { nodepool-type: runner }` + Spot VM toleration
+- **Listener Pod**: Guaranteed QoS (`requests = limits`) — critical component, must not be evicted
+
+### AKS Cluster Rebuild Procedure
+
+Required when changing immutable properties (networkPlugin, networkPolicy, networkPluginMode):
+
+```bash
+# 1. Uninstall ARC
+helm uninstall arc-runner-set -n arc-runners --no-hooks
+helm uninstall arc -n arc-systems --no-hooks
+
+# 2. Delete cluster
+az aks delete -g rg-ghrunner-prod -n aks-ghrunner-prod --yes
+
+# 3. Deploy new cluster
+az deployment sub create --location eastasia --template-file main.bicep --parameters main.bicepparam
+
+# 4. Get credentials + install ARC
+az aks get-credentials -g rg-ghrunner-prod -n aks-ghrunner-prod --overwrite-existing
+helm install arc --namespace arc-systems --create-namespace \
+  --set "tolerations[0].key=CriticalAddonsOnly" \
+  --set "tolerations[0].operator=Exists" \
+  --set "tolerations[0].effect=NoSchedule" \
+  --wait oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
+
+# 5. Create secret + install runner
+kubectl create ns arc-runners
+kubectl create secret generic github-pat-secret -n arc-runners --from-literal=github_token="$GITHUB_PAT"
+helm install arc-runner-set -n arc-runners -f kubernetes/arc-runner-values.yaml --wait --timeout 5m \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+```
 
 ### Naming Patterns
 
@@ -115,11 +156,17 @@ shellcheck scripts/*.sh
 
 1. **K8s version**: East Asia region may not support latest K8s versions. Run `az aks get-versions --location <location>` before deploying
 2. **ARC listenerTemplate**: Must include `containers` section with `name: listener` — otherwise tolerations/nodeSelector are silently ignored
-3. **ACR naming**: No dashes allowed (Azure restriction)
+3. **ACR naming**: No dashes allowed (Azure restriction), uses `replace()` to strip them
 4. **Spot VM eviction**: Runner Pool uses `scaleSetEvictionPolicy: 'Delete'` — jobs must be idempotent
 5. **SSH default**: `ssh_source_address_prefix` defaults to `"*"` — restrict in production
 6. **Terraform state**: No remote backend configured — defaults to local state
 7. **Bicep deploys at subscription scope** (creates RG); Terraform deploys within existing RG
+8. **AKS network config is immutable**: `networkPlugin`, `networkPluginMode`, `networkPolicy` cannot be changed after cluster creation. Must delete and recreate the cluster to change these.
+9. **ARC DinD + template.spec.containers conflict**: When `containerMode.type: "dind"` is enabled, do NOT define `containers` in `template.spec` — ARC auto-injects runner + dind containers. Adding custom containers causes `initContainers[0].image: null` validation errors.
+10. **ARC uninstall stuck resources**: After `helm uninstall`, ARC CRD resources (AutoscalingRunnerSet, AutoscalingListener, ServiceAccount) may get stuck in `Terminating` due to `actions.github.com/cleanup-protection` finalizer. Fix: `kubectl patch <resource> --type merge -p '{"metadata":{"finalizers":null}}'`
+11. **ARC stale scale set ID**: If runner scale set is reinstalled multiple times, GitHub may cache old scale set IDs causing `RunnerScaleSetNotFoundException`. Fix: fully uninstall, clean all orphaned resources, then fresh install.
+12. **GitHub PAT for org-level ARC**: Fine-grained PAT needs Organization permission `Self-hosted runners: Read and write` (not just `Administration`) to register runners at organization scope.
+13. **AKS stopped cluster**: `kubectl` commands fail with DNS errors when cluster is stopped. Check with `az aks show --query powerState.code` and start with `az aks start`.
 
 ## Related Instructions
 

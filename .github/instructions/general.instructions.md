@@ -26,9 +26,20 @@ applyTo: "**"
 ### GitHub AKS Runner 特性
 - **支援 GitHub Copilot Coding Agent** - 這是專案的主要使用案例之一
 - **使用官方 Runner Image** - `ghcr.io/actions/actions-runner:latest`，無需自訂 container image
+- **githubConfigUrl**: 組織層級 (`https://github.com/MoneyForge`)，所有 repo 共享
 - **雙 Pool 架構**:
   - System Pool: 1× B2s (固定), 承載 K8s 系統組件與 ARC controller
   - Runner Pool: 0-10× D4s_v3 Spot VM (自動擴展), 承載 GitHub runner 工作負載
+- **網路配置**: Azure CNI Overlay + 無 Network Policy (減少節點開銷)
+- **scaleDownMode**: Deallocate (保留 OS disk cache，加速 scale-up)
+- **DinD 模式**: 預設啟用 Docker-in-Docker，支援 container jobs
+- **按需擴展**: minRunners=0，閒置時不保留 runner，有 job 時自動建立
+
+### ARC 運維注意事項
+- **PAT 過期**: GitHub PAT 過期會導致 listener 無法建立，需更新 K8s Secret 並重啟 controller
+- **卡住的資源**: ARC CRD 資源可能因 finalizer 卡在 Terminating，需手動移除 finalizer
+- **不可變屬性**: AKS networkPlugin/networkPolicy 建立後無法變更，需刪除重建叢集
+- **DinD 限制**: 啟用 DinD 時不可在 template.spec 中定義 containers，ARC 會自動注入
 
 ### VM Runner 特性
 - **Cloud-init 初始化** - 使用 `cloud-init.yml` 配置 VM
