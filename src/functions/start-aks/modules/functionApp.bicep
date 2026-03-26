@@ -1,8 +1,10 @@
 // ============================================================================
 // Function App 模組 — 定時啟動 AKS 叢集
-// 包含 Storage Account、App Service Plan (Flex Consumption) 與 Function App
+// 包含 App Service Plan (Flex Consumption) 與 Function App
 // Flex Consumption 使用 Linux + Managed Identity，不依賴 Azure Files，
 // 因此與公司禁用 Storage shared key access 的 Policy 相容。
+//
+// Storage Account 由 main.bicep 建立，本模組透過 existing 引用。
 // ============================================================================
 
 // ============================================================================
@@ -15,11 +17,14 @@ param functionAppName string
 @description('部署位置')
 param location string
 
-@description('Storage Account 名稱')
+@description('Storage Account 名稱（由 main.bicep 建立）')
 param storageAccountName string
 
 @description('AKS 叢集 JSON 設定（會寫入 App Setting）')
 param aksClustersJson string
+
+@description('Function App VNet Integration 用的 Subnet ID')
+param funcSubnetId string
 
 @description('標籤')
 param tags object = {}
@@ -31,32 +36,11 @@ param tags object = {}
 var deploymentStorageContainerName = 'app-package-${take(functionAppName, 32)}'
 
 // ============================================================================
-// Storage Account
+// 引用由 main.bicep 建立的 Storage Account
 // ============================================================================
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
-  location: location
-  kind: 'StorageV2'
-  sku: {
-    name: 'Standard_LRS'
-  }
-  properties: {
-    allowSharedKeyAccess: false
-    minimumTlsVersion: 'TLS1_2'
-    allowBlobPublicAccess: false
-  }
-  tags: tags
-
-  resource blobServices 'blobServices' = {
-    name: 'default'
-    resource deploymentContainer 'containers' = {
-      name: deploymentStorageContainerName
-      properties: {
-        publicAccess: 'None'
-      }
-    }
-  }
 }
 
 // ============================================================================
@@ -78,7 +62,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2024-04-01' = {
 }
 
 // ============================================================================
-// Function App (Linux, Flex Consumption, Node.js 20)
+// Function App (Linux, Flex Consumption, Node.js 22)
 // ============================================================================
 
 resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
@@ -91,6 +75,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
   properties: {
     serverFarmId: appServicePlan.id
     httpsOnly: true
+    virtualNetworkSubnetId: funcSubnetId
     functionAppConfig: {
       deployment: {
         storage: {

@@ -5,6 +5,8 @@
 // 每天台北時間 06:00 自動啟動指定的 AKS 叢集。
 //
 // 透過 Managed Identity 認證，支援以 JSON 陣列參數同時啟動多台 AKS。
+// 使用 VNet Integration + Private Endpoint 存取 Storage Account，
+// 不需開啟 publicNetworkAccess，符合公司 Azure Policy。
 //
 // 部署指令:
 //   az deployment sub create --location eastasia \
@@ -50,12 +52,16 @@ param tags object = {
 var resourceGroupName = 'rg-${projectName}-${environment}'
 var functionAppName = 'func-${projectName}-${environment}'
 var storageAccountName = replace('st${projectName}${environment}', '-', '')
+var vnetName = 'vnet-${projectName}-${environment}'
 
 // 將 aksTargets 陣列序列化為 JSON 字串，供 Function App 使用
 var aksClustersJson = string(aksTargets)
 
 // 收集不重複的目標 Resource Group 名稱（用於角色指派）
 var targetResourceGroups = [for target in aksTargets: target.resourceGroup]
+
+// 部署用 blob container 名稱
+var deploymentStorageContainerName = 'app-package-${take(functionAppName, 32)}'
 
 // ============================================================================
 // Resource Group
@@ -65,6 +71,38 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: resourceGroupName
   location: location
   tags: tags
+}
+
+// ============================================================================
+// Storage Account — 供 Function App 使用
+// 獨立於 Function App 模組，讓 network 模組可引用建立 Private Endpoint
+// ============================================================================
+
+module storage 'modules/storage.bicep' = {
+  name: 'deploy-storage'
+  scope: rg
+  params: {
+    storageAccountName: storageAccountName
+    location: location
+    deploymentStorageContainerName: deploymentStorageContainerName
+    tags: tags
+  }
+}
+
+// ============================================================================
+// 網路模組 — VNet + Private Endpoint + Private DNS Zone
+// ============================================================================
+
+module network 'modules/network.bicep' = {
+  name: 'deploy-network'
+  scope: rg
+  params: {
+    location: location
+    vnetName: vnetName
+    storageAccountId: storage.outputs.storageAccountId
+    storageAccountName: storageAccountName
+    tags: tags
+  }
 }
 
 // ============================================================================
@@ -79,6 +117,7 @@ module functionApp 'modules/functionApp.bicep' = {
     location: location
     storageAccountName: storageAccountName
     aksClustersJson: aksClustersJson
+    funcSubnetId: network.outputs.funcSubnetId
     tags: tags
   }
 }
