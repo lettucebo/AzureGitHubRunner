@@ -176,6 +176,17 @@ template:
   spec:
     nodeSelector:
       nodepool-type: runner
+    # Runner 容器資源請求：避免 requests=0 導致 autoscaler 不擴節點、pod 過度打包
+    # 注意：指定 containers 時必須同時帶 image/command，否則 chart 會覆蓋掉預設值
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command:
+          - /home/runner/run.sh
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
     tolerations:
       - key: "kubernetes.azure.com/scalesetpriority"
         operator: "Equal"
