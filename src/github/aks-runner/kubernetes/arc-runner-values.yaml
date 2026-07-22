@@ -22,6 +22,18 @@ template:
     nodeSelector:
       nodepool-type: runner
 
+    # Runner 容器資源請求：避免 requests=0 導致 autoscaler 不擴節點、pod 過度打包
+    # cpu=1/mem=2Gi → D4s_v3(4vCPU) 約 3 runner/node；不設 limit 以允許 burst 並避免 OOM 中斷 build
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command:
+          - /home/runner/run.sh
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+
     # Spot VM 需要這個 toleration
     tolerations:
       - key: "kubernetes.azure.com/scalesetpriority"

@@ -91,8 +91,18 @@ async function startAks(myTimer: Timer, context: InvocationContext): Promise<voi
   }
 }
 
-// 每天台北時間 06:00 觸發（搭配 WEBSITE_TIME_ZONE=Asia/Taipei）
+// 排程觸發時間（搭配 WEBSITE_TIME_ZONE=Asia/Taipei）
+// 公司強制每日 00:05 台北停機（~2.5 分完成）。為最小化停機視窗：
+//   - 主要：00:20 與 00:35（停機後 15/30 分再啟動，符合 AKS 官方「停機後等 15–30 分」建議；
+//     兩次嘗試涵蓋反配置延遲；停機視窗由 ~6h 縮到 ~15 分）
+//   - fallback：06:00（保底，維持原行為，萬一前兩次都 skip 也不會比原本更差）
+// handler 具冪等性（powerState 非 Stopped 即 skip），故多次觸發安全。
 app.timer('startAks', {
+  schedule: '0 20,35 0 * * *',
+  handler: startAks,
+});
+
+app.timer('startAksFallback', {
   schedule: '0 0 6 * * *',
   handler: startAks,
 });
