@@ -24,12 +24,12 @@ param tags = {
   managedBy: 'bicep'
 }
 
-// 排程與時區採用預設值即可 (可省略，僅示範明確覆寫方式)
-param timeZone = 'Asia/Taipei'
-param startSchedule = '0 25,40 0 * * *'
-param startFallbackSchedule = '0 0 6 * * *'
-param stopSchedule = '0 0 20 * * *'
+// 排程與是否啟用停止採用預設值即可 (可省略，僅示範明確覆寫方式)
+// 重要: Flex Consumption 的 Timer Trigger 一律以 UTC 解讀 NCRONTAB，
+// 詳見 README.md「時區與排程」章節。
+param startScheduleUtc = '0 0 22 * * *'
+param stopScheduleUtc = '0 0 14 * * *'
 
-// 停止排程預設停用，確保部署後不會誤停正在使用中的叢集；
+// 停止排程預設停用 (fail-closed)，確保部署後不會誤停正在使用中的叢集；
 // 確認排程時段安全無虞後，再手動改為 true 啟用
 param enableStopSchedule = false

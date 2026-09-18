@@ -1,88 +1,56 @@
 import { app, InvocationContext, Timer } from '@azure/functions';
 import { DefaultAzureCredential } from '@azure/identity';
 import { ContainerServiceClient } from '@azure/arm-containerservice';
-import { parseAksClusters, decideStopAction, resolveSchedule, AksClusterTarget } from '../aksPower.js';
+import { runStopAks, type ClientFactory, type Logger } from '../aksOperations.js';
+import { resolveSchedule } from '../aksPower.js';
 
 // ============================================================================
-// 型別定義
-// ============================================================================
-
-interface StopResult {
-  cluster: string;
-  status: 'stopped' | 'skipped' | 'failed';
-  message: string;
-}
-
-// ============================================================================
-// Timer Trigger — 定時停止 AKS 叢集
+// Timer Trigger — 定時停止 AKS 叢集 (fail-closed)
 //
-// 預設透過官方 app setting `AzureWebJobs.stopAks.Disabled=true` 停用，
-// 需要由 Bicep 參數 `enableStopSchedule=true` 明確開啟，避免誤停正在
-// 使用中的叢集。只有電源狀態精確為 'Running' 時才會呼叫 beginStopAndWait，
-// 其餘狀態 (Stopped / Stopping / Starting / undefined / 未知值) 一律跳過並記錄原因。
+// 唯一的啟用開關是 app setting `AKS_STOP_ENABLED`：由 aksOperations.ts 的
+// runStopAks 在「解析 AKS_CLUSTERS、建立 credential/client、發出任何 Azure
+// 呼叫之前」檢查 (isStopScheduleEnabled)，只有去除前後空白後精確等於
+// (不分大小寫) 'true' 才會實際執行；缺少、空白、'false'、或任何其他值
+// 一律視為停用並直接返回，確保設定缺失/錯誤時預設不會誤停正在使用中的叢集。
+// Bicep 參數 enableStopSchedule (預設 false) 一對一對應到本 app setting，
+// 透過 `AKS_STOP_ENABLED: string(enableStopSchedule)` 產生。
+//
+// ── Flex Consumption Timer Trigger 僅支援 UTC ──────────────────────────────
+// Flex Consumption 目前不支援 WEBSITE_TIME_ZONE / TZ 來調整 Timer Trigger
+// 的解讀時區，NCRONTAB 一律以 UTC 執行；詳見:
+//   https://learn.microsoft.com/en-us/azure/azure-functions/errors-diagnostics/diagnostic-events/azfd0010
+//   https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer#time-zones
+// 因此本專案的排程一律以 UTC cron 表示式設定，操作者需自行換算並在 DST
+// (日光節約時間) 切換時手動更新 UTC 表示式 (Azure Functions 不會自動調整)。
+// 詳見 README.md「時區與排程」章節。
 // ============================================================================
+
+const credential = new DefaultAzureCredential();
+
+const clientFactory: ClientFactory = (subscriptionId: string) =>
+  new ContainerServiceClient(credential, subscriptionId);
 
 async function stopAks(myTimer: Timer, context: InvocationContext): Promise<void> {
-  context.log('開始執行 AKS 叢集停止排程');
+  const logger: Logger = {
+    log: (message: string) => context.log(message),
+    error: (message: string) => context.error(message),
+  };
 
-  const parseResult = parseAksClusters(process.env.AKS_CLUSTERS);
-  if (!parseResult.ok) {
-    context.error(`AKS_CLUSTERS 驗證失敗: ${parseResult.error}`);
-    return;
-  }
-  const clusters: AksClusterTarget[] = parseResult.clusters;
-
-  context.log(`共 ${clusters.length} 個叢集待處理`);
-
-  const credential = new DefaultAzureCredential();
-  const results: StopResult[] = [];
-
-  // 逐一處理每個叢集（錯誤隔離：單一叢集失敗不影響後續叢集）
-  for (const cluster of clusters) {
-    const clusterDisplayName = `${cluster.resourceGroup}/${cluster.name}`;
-    context.log(`處理叢集: ${clusterDisplayName}`);
-
-    try {
-      const client = new ContainerServiceClient(credential, cluster.subscriptionId);
-
-      // 檢查叢集電源狀態
-      const aksCluster = await client.managedClusters.get(cluster.resourceGroup, cluster.name);
-      const powerState = aksCluster.powerState?.code;
-      context.log(`叢集 ${clusterDisplayName} 目前狀態: ${powerState}`);
-
-      const decision = decideStopAction(powerState);
-      if (decision.action === 'stop') {
-        context.log(`正在停止叢集 ${clusterDisplayName}... (${decision.reason})`);
-        await client.managedClusters.beginStopAndWait(cluster.resourceGroup, cluster.name);
-        context.log(`✓ 叢集 ${clusterDisplayName} 停止完成`);
-        results.push({ cluster: clusterDisplayName, status: 'stopped', message: '停止完成' });
-      } else {
-        context.log(`跳過叢集 ${clusterDisplayName}: ${decision.reason}`);
-        results.push({ cluster: clusterDisplayName, status: 'skipped', message: decision.reason });
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      context.error(`❌ 叢集 ${clusterDisplayName} 停止失敗: ${errorMessage}`);
-      results.push({ cluster: clusterDisplayName, status: 'failed', message: errorMessage });
-    }
-  }
-
-  // 彙整結果
-  const stopped = results.filter(r => r.status === 'stopped').length;
-  const skipped = results.filter(r => r.status === 'skipped').length;
-  const failed = results.filter(r => r.status === 'failed').length;
-
-  context.log(`執行完畢 — 停止: ${stopped}, 跳過: ${skipped}, 失敗: ${failed}`);
-
-  if (failed > 0) {
-    context.error('部分叢集停止失敗，請檢查上方日誌');
-  }
+  await runStopAks(
+    {
+      aksClustersRaw: process.env.AKS_CLUSTERS,
+      stopEnabledRaw: process.env.AKS_STOP_ENABLED,
+    },
+    clientFactory,
+    logger,
+  );
 }
 
-// 排程可透過 AKS_STOP_SCHEDULE app setting 覆寫；未設定時回退為預設值。
-// 函式本身預設停用 (見 modules/functionApp.bicep 的 AzureWebJobs.stopAks.Disabled)，
-// 需由 Bicep 參數 enableStopSchedule=true 明確開啟才會實際觸發。
+// 預設 UTC 排程 0 0 14 * * * = 每日 UTC 14:00，對應台北時間 (UTC+8) 當天
+// 22:00。可透過 AKS_STOP_SCHEDULE_UTC app setting 覆寫；未設定時回退為
+// 此預設值。排程本身與 AKS_STOP_ENABLED 開關互相獨立：即使排程觸發，
+// 若開關未精確為 'true' 仍不會執行任何動作 (見上方 fail-closed 說明)。
 app.timer('stopAks', {
-  schedule: resolveSchedule(process.env.AKS_STOP_SCHEDULE, '0 0 20 * * *'),
+  schedule: resolveSchedule(process.env.AKS_STOP_SCHEDULE_UTC, '0 0 14 * * *'),
   handler: stopAks,
 });

@@ -10,14 +10,14 @@
 
 | 功能 | 支援 | 說明 |
 |------|:----:|------|
-| 排程啟動 | ✅ | 兩個 Timer Trigger（`startAks` 00:25/00:40，`startAksFallback` 06:00，皆台北時間） |
-| 排程停止 | ✅（預設停用） | `stopAks` Timer Trigger，需明確設定 `enableStopSchedule=true` 才會啟用 |
-| 排程可設定 | ✅ | 透過 `AKS_START_SCHEDULE` / `AKS_START_FALLBACK_SCHEDULE` / `AKS_STOP_SCHEDULE` app setting 覆寫；未設定時回退為程式碼內建的相同預設值 |
+| 排程啟動 | ✅ | 單一 Timer Trigger `startAks`，預設 `0 0 22 * * *`（UTC） |
+| 排程停止 | ✅（預設停用，fail-closed） | `stopAks` Timer Trigger，預設 `0 0 14 * * *`（UTC）；需 `AKS_STOP_ENABLED` 精確為 `"true"`（不分大小寫、自動 trim）才會實際執行，否則在任何 Azure 呼叫之前就會被跳過 |
+| 排程可設定 | ✅ | 透過 `AKS_START_SCHEDULE_UTC` / `AKS_STOP_SCHEDULE_UTC` app setting 覆寫（皆為 UTC NCRONTAB）；未設定時回退為程式碼內建的相同預設值 |
 | 多叢集支援 | ✅ | 同時啟動/停止多個 AKS 叢集 |
 | 跨訂閱 | ✅ | 叢集可分佈在不同 Azure 訂閱 |
 | Managed Identity | ✅ | 透過系統指派 MI 無密碼認證 |
 | 冪等操作 | ✅ | 只對精確符合的電源狀態動作，其餘一律跳過 |
-| 錯誤隔離 | ✅ | 單一叢集失敗不影響其他叢集（各自獨立 try/catch） |
+| 錯誤隔離 | ✅ | `AKS_CLUSTERS` 中單筆格式錯誤的項目（逐項驗證）與單一叢集的 Azure API 失敗（try/catch）皆互相隔離 —— 一筆錯誤絕不會擋住其餘項目 |
 
 ## 🏗️ 架構概覽
 
@@ -26,19 +26,29 @@
 │                Azure Function App                  │
 │         (Linux Flex Consumption, Node.js 22)        │
 │                                                     │
-│  Timer: startAks（00:25 與 00:40 台北時間，預設）    │
-│  Timer: startAksFallback（06:00 台北時間，預設）      │
-│  Timer: stopAks（20:00 台北時間，預設 —— 預設停用，   │
-│          透過 AzureWebJobs.stopAks.Disabled=true /   │
-│          enableStopSchedule=false）                  │
+│  Timer: startAks（預設 0 0 22 * * * UTC =           │
+│          台北時間隔天 06:00）                        │
+│  Timer: stopAks（預設 0 0 14 * * * UTC =            │
+│          台北時間當天 22:00 —— 由 AKS_STOP_ENABLED   │
+│          把關，fail-closed）                         │
 │         │                                           │
 │         ▼                                           │
-│  讀取並驗證 AKS_CLUSTERS 環境變數（須為非空 JSON      │
-│  陣列，每筆含 subscriptionId/resourceGroup/name）     │
-│  — src/aksPower.ts                                   │
+│  src/functions/*.ts —— 僅負責裝配 (wiring)：          │
+│  由環境變數建立 credential/clientFactory/logger，     │
+│  註冊 UTC Timer，委派給 src/aksOperations.ts          │
 │         │                                           │
 │         ▼                                           │
-│  逐一處理每個叢集（try/catch，錯誤互相隔離）:          │
+│  src/aksOperations.ts —— 可測試的執行邏輯：            │
+│   1. 僅 stopAks：於任何動作之前先檢查                 │
+│      AKS_STOP_ENABLED === "true"（trim、不分大小寫）  │
+│      不符合即記錄並返回，零 Azure 呼叫                │
+│   2. 解析並驗證 AKS_CLUSTERS（src/aksPower.ts）：      │
+│      全域 JSON/陣列/空陣列失敗 ⇒ 中止；               │
+│      否則逐項獨立驗證，無效項目記錄並跳過，            │
+│      有效項目繼續處理                                │
+│         │                                           │
+│         ▼                                           │
+│  逐一處理每個有效叢集（try/catch，錯誤互相隔離）:      │
 │  ┌───────────────────────────────────────────┐       │
 │  │ 檢查精確 powerState.code                    │       │
 │  │  啟動：僅 'Stopped' → beginStartAndWait     │──── Managed ──▶ AKS 叢集 1
@@ -96,18 +106,29 @@ az aks show -g rg-ghrunner-prod -n aks-ghrunner-prod --query powerState.code
 
 | 變數 | 說明 | 預設值（未設定時） |
 |------|------|---------------------|
-| `AKS_CLUSTERS` | 目標叢集 JSON 陣列（必填，須為**非空**陣列） | 無預設值；缺少/無效/空陣列 ⇒ 明確記錄錯誤且不呼叫任何 Azure API |
-| `WEBSITE_TIME_ZONE` | IANA 時區名稱 (Linux)，套用於下列所有 Timer 排程 | `Asia/Taipei` |
-| `AKS_START_SCHEDULE` | 主要 `startAks` Timer 的 NCRONTAB 排程 | `0 25,40 0 * * *` |
-| `AKS_START_FALLBACK_SCHEDULE` | `startAksFallback` Timer 的 NCRONTAB 排程 | `0 0 6 * * *` |
-| `AKS_STOP_SCHEDULE` | `stopAks` Timer 的 NCRONTAB 排程 | `0 0 20 * * *` |
-| `AzureWebJobs.stopAks.Disabled` | 官方 Azure Functions 停用特定函式的 app setting。**預設為 `true`**（由 Bicep `enableStopSchedule=false` 產生），確保停止排程未經明確啟用不會執行 | `true` |
+| `AKS_CLUSTERS` | 目標叢集 JSON 陣列（必填，須為**非空**陣列） | 無預設值；缺少/無效 JSON/非陣列/空陣列 ⇒ 明確記錄錯誤且不呼叫任何 Azure API |
+| `AKS_START_SCHEDULE_UTC` | `startAks` Timer 的 NCRONTAB 排程（**UTC**） | `0 0 22 * * *`（UTC） |
+| `AKS_STOP_SCHEDULE_UTC` | `stopAks` Timer 的 NCRONTAB 排程（**UTC**） | `0 0 14 * * *`（UTC） |
+| `AKS_STOP_ENABLED` | **啟用停止排程的唯一真實來源**。去除前後空白後，只有「精確等於」(不分大小寫) 字串 `"true"` 才視為啟用；缺少、空白、`"false"`，或任何其他值 ⇒ 停用 (fail-closed) | 未設定（⇒ 停用） |
 
 所有排程值皆在程式碼中解析（`src/aksPower.ts` → `resolveSchedule`）：app setting 去除前後空白後若非空字串即採用，否則回退到程式碼內建的上述預設值。這代表僅部署程式碼、尚未套用 Bicep app settings 的情境，仍會以相同預設值正確索引與執行。
 
+### ⏰ 時區與排程（僅支援 UTC）
+
+Flex Consumption 的 Timer Trigger **一律以 UTC 解讀** NCRONTAB 表示式，本方案不支援 `WEBSITE_TIME_ZONE` / `TZ` 來調整解讀時區。參考：
+- https://learn.microsoft.com/en-us/azure/azure-functions/errors-diagnostics/diagnostic-events/azfd0010
+- https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer#time-zones
+
+對操作者的影響：
+- 預設值（啟動 `0 0 22 * * *`／停止 `0 0 14 * * *`，皆為 UTC）分別對應**台北時間 (UTC+8) 06:00／22:00**，但啟動排程實際觸發時間是「前一個 UTC 曆日」的 22:00（例如 UTC 週一 22:00 → 台北時間週二 06:00）。
+- **星期欄位會跨越 UTC 曆日邊界。** 若需要以「特定當地星期」為錨點的排程（例如「每週一台北時間 06:00」），須注意台北時間週一 06:00 = UTC **週日** 22:00 —— 星期欄位必須以 UTC 的星期表示，而非當地星期。
+- **不會自動調整日光節約時間 (DST)。** 若目標時區實施 DST，操作者需自行在偏移量變動時更新 UTC NCRONTAB 表示式（`AKS_START_SCHEDULE_UTC` / `AKS_STOP_SCHEDULE_UTC`）；Azure Functions 不會自動平移。
+
 ### AKS_CLUSTERS 格式
 
-必須為**非空 JSON 陣列**；每筆項目的 `subscriptionId`、`resourceGroup`、`name` 皆須為非空字串。無效/缺少 JSON、非陣列型別（例如物件）、空陣列，或任何項目缺少/為空字串的欄位，皆會被拒絕並明確記錄錯誤，**且不會呼叫任何 Azure API**。
+必須為**非空 JSON 陣列**。陣列本身須合法：缺少/無效 JSON、非陣列型別（例如物件）、或空陣列，屬於**全域**失敗 —— 會被明確記錄錯誤且**完全不呼叫任何 Azure API**。
+
+只要陣列本身合法且非空，**每筆項目各自獨立驗證**（per-cluster isolation）：缺少/欄位為空字串的 `subscriptionId`、`resourceGroup`、或 `name` 項目，會依其索引記錄錯誤（例如 `AKS_CLUSTERS 第 1 筆項目缺少有效的 subscriptionId/resourceGroup/name...`）並跳過，但**絕不**因此拒絕陣列中其餘合法項目 —— 這些項目仍會正常處理。合法項目的三個字串欄位會被 trim。若全部項目皆無效，該次執行僅會處理零個叢集（並記錄每筆原因），而非直接判定整體失敗。
 
 ```json
 [
@@ -128,7 +149,7 @@ az aks show -g rg-ghrunner-prod -n aks-ghrunner-prod --query powerState.code
 
 兩個函式皆讀取叢集精確的 `powerState.code`，僅對唯一預期的狀態值採取動作；其餘所有狀態皆明確跳過並記錄原因（絕不靜默忽略）：
 
-| `powerState.code` | `startAks` / `startAksFallback` | `stopAks` |
+| `powerState.code` | `startAks` | `stopAks` |
 |---|---|---|
 | `Stopped` | ✅ 呼叫 `beginStartAndWait` | ⏭️ 跳過（已停止） |
 | `Running` | ⏭️ 跳過（已運行） | ✅ 呼叫 `beginStopAndWait` |
@@ -139,21 +160,21 @@ az aks show -g rg-ghrunner-prod -n aks-ghrunner-prod --query powerState.code
 
 每個叢集皆在獨立的 `try/catch` 中處理；單一叢集失敗（例如權限錯誤、API 限流）會被記錄，且**不會**阻擋同一次執行中後續叢集的處理。
 
-## 🔐 停止排程的安全機制（預設停用）
+## 🔐 停止排程的安全機制 —— 預設 Fail-Closed
 
-`stopAks` Timer Trigger **預設為停用狀態**：
+`stopAks` Timer Trigger 仍會依排程觸發，但**其實際的停止邏輯由程式碼把關、預設停用**：
 
-- Bicep 參數 `enableStopSchedule` 預設為 `false`。
-- 此參數會產生官方 app setting `AzureWebJobs.stopAks.Disabled = string(!enableStopSchedule)`，預設即為 `"true"` —— Azure Functions Host 完全不會呼叫 `stopAks`。
-- 若要啟用，請在 `main.bicepparam` 中將 `enableStopSchedule = true` 並重新部署；Function App 的 app setting 會翻轉為 `"false"`。
-- 刻意**不新增第二個自訂啟用旗標** —— `enableStopSchedule` 是唯一的真實來源，與官方停用機制一對一對應。
+- Bicep 參數 `enableStopSchedule` 預設為 `false`，會一對一映射為 app setting `AKS_STOP_ENABLED: string(enableStopSchedule)`。
+- **程式碼本身**（`src/aksOperations.ts` → `runStopAks`，使用 `src/aksPower.ts` → `isStopScheduleEnabled`）會在**第一步**就檢查 `AKS_STOP_ENABLED`，早於解析 `AKS_CLUSTERS`、早於建立任何 credential/client、早於任何 Azure API 呼叫。只有去除前後空白後精確等於（不分大小寫）`"true"` 的值才會繼續執行；其餘 —— 缺少、空白、`"false"`、拼字錯誤 —— 皆會記錄明確訊息並立即返回，零 Azure 呼叫。
+- 這是刻意採用**程式碼層級、fail-closed** 的把關機制，而非僅依賴 Azure Functions Host 層級的 `AzureWebJobs.<name>.Disabled` 機制：若該 app setting 缺失/設定錯誤，或該機制本身在 Host 層有非預期行為，先前的實作方式仍有函式繼續執行的風險。`AKS_STOP_ENABLED` 是**唯一的真實來源** —— 沒有第二個旗標需要保持同步。
+- 若要啟用，請在 `main.bicepparam` 中將 `enableStopSchedule = true` 並重新部署；app setting 會變為 `"true"`。
 
 ## ⚠️ 操作注意事項
 
 - **冪等，但非同步佇列**：`beginStartAndWait`/`beginStopAndWait` 會在函式執行期間等待 ARM 長時間執行作業完成，因此若排程觸發時叢集正處於轉換中狀態，該次觸發僅會被跳過（見上表），不會被排隊或自動重試。
 - **不具跨次執行鎖定機制**：若透過其他方式（例如手動 `az aks start/stop`）同時操作叢集，下一次排程執行只會依當下觀察到的 `powerState.code` 決定動作。
 - **Managed Identity 權限**：啟動與停止皆需要目標 Resource Group 上的 "Azure Kubernetes Service Contributor"（或相當）角色 —— 既有的角色指派同時涵蓋啟動與停止。
-- **時區**：三個排程皆依 `WEBSITE_TIME_ZONE`（預設 `Asia/Taipei`）解讀；變更時區會讓所有排程一併平移。
+- **僅支援 UTC 排程**：兩個 Timer 排程皆嚴格以 UTC 解讀（見上方「時區與排程」）—— 沒有任何時區 app setting 可以平移排程。
 
 ## 💰 成本估算
 
@@ -169,9 +190,9 @@ az aks show -g rg-ghrunner-prod -n aks-ghrunner-prod --query powerState.code
 
 ### Function 沒有觸發
 
-1. 確認 `WEBSITE_TIME_ZONE` 已設定為您預期的 IANA 時區（預設 `Asia/Taipei`）
+1. 請記得排程僅支援 UTC（見上方「時區與排程」）—— 請再次確認 `AKS_START_SCHEDULE_UTC` / `AKS_STOP_SCHEDULE_UTC` 是以 UTC（而非當地時間）表示
 2. 檢查 Function App 是否運行中：`az functionapp show -g rg-startaks-prod -n func-startaks-prod --query state`
-3. 針對 `stopAks`：若預期它應該執行，請確認 `AzureWebJobs.stopAks.Disabled` 為 `"false"`（即已部署 `enableStopSchedule=true`）
+3. 針對 `stopAks`：若預期它應該實際執行停止動作，請確認 `AKS_STOP_ENABLED` 精確為 `"true"`（即已部署 `enableStopSchedule=true`）—— Timer 本身仍會依排程觸發，但除非此值精確為 `"true"`，程式碼會立即返回、不呼叫任何 Azure API
 
 ### 啟動/停止 AKS 時權限不足
 
@@ -187,6 +208,6 @@ az aks show -g rg-ghrunner-prod -n aks-ghrunner-prod --query powerState.code
 ### AKS 叢集仍然停止／仍然運行
 
 1. 查看 Function App 日誌：`az functionapp log tail -g rg-startaks-prod -n func-startaks-prod`
-2. 確認 `AKS_CLUSTERS` JSON 格式正確（非空陣列，所有欄位皆為非空字串）
+2. 確認 `AKS_CLUSTERS` JSON 格式正確 —— 陣列本身必須是合法的非空 JSON 陣列（缺少/非陣列/空陣列屬於全域失敗），但合法陣列內個別無效項目只會被記錄並跳過，不會造成全域失敗
 3. 確認叢集的 `powerState.code` 是否符合函式預期的精確值（見上方電源狀態表）——任何非預期的精確值皆會依設計被跳過
 4. 嘗試手動啟動/停止：`az aks start -g <rg> -n <aks-name>` / `az aks stop -g <rg> -n <aks-name>`
