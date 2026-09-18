@@ -25,10 +25,12 @@ import { resolveSchedule } from '../aksPower.js';
 // 詳見 README.md「時區與排程」章節。
 // ============================================================================
 
-const credential = new DefaultAzureCredential();
+let credential: DefaultAzureCredential | undefined;
 
-const clientFactory: ClientFactory = (subscriptionId: string) =>
-  new ContainerServiceClient(credential, subscriptionId);
+const clientFactory: ClientFactory = (subscriptionId: string) => {
+  credential ??= new DefaultAzureCredential();
+  return new ContainerServiceClient(credential, subscriptionId);
+};
 
 async function stopAks(myTimer: Timer, context: InvocationContext): Promise<void> {
   const logger: Logger = {
