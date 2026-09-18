@@ -23,3 +23,13 @@ param tags = {
   environment: 'prod'
   managedBy: 'bicep'
 }
+
+// 排程與時區採用預設值即可 (可省略，僅示範明確覆寫方式)
+param timeZone = 'Asia/Taipei'
+param startSchedule = '0 25,40 0 * * *'
+param startFallbackSchedule = '0 0 6 * * *'
+param stopSchedule = '0 0 20 * * *'
+
+// 停止排程預設停用，確保部署後不會誤停正在使用中的叢集；
+// 確認排程時段安全無虞後，再手動改為 true 啟用
+param enableStopSchedule = false

@@ -45,6 +45,21 @@ param tags object = {
   managedBy: 'bicep'
 }
 
+@description('Function App 的 IANA 時區名稱，決定排程 (schedule) 的解讀時區')
+param timeZone string = 'Asia/Taipei'
+
+@description('主要啟動排程 (NCRONTAB)，預設為公司強制停機後的最小停機視窗時段')
+param startSchedule string = '0 25,40 0 * * *'
+
+@description('保底啟動排程 (NCRONTAB)，主要排程失敗時的備援')
+param startFallbackSchedule string = '0 0 6 * * *'
+
+@description('停止排程 (NCRONTAB)，僅在 enableStopSchedule=true 時實際生效')
+param stopSchedule string = '0 0 20 * * *'
+
+@description('是否啟用定時停止排程。預設 false (停用)，避免部署後誤停正在使用中的叢集；需明確設為 true 才會啟用 stopAks 函式')
+param enableStopSchedule bool = false
+
 // ============================================================================
 // 變數
 // ============================================================================
@@ -119,6 +134,11 @@ module functionApp 'modules/functionApp.bicep' = {
     aksClustersJson: aksClustersJson
     funcSubnetId: network.outputs.funcSubnetId
     tags: tags
+    timeZone: timeZone
+    startSchedule: startSchedule
+    startFallbackSchedule: startFallbackSchedule
+    stopSchedule: stopSchedule
+    enableStopSchedule: enableStopSchedule
   }
 }
 

@@ -1,14 +1,16 @@
 {
   "name": "start-aks",
   "version": "1.0.0",
-  "description": "定時啟動 AKS 叢集的 Azure Function",
+  "description": "定時啟動/停止 AKS 叢集的 Azure Function（啟動排程預設啟用，停止排程預設停用）",
   "main": "dist/src/functions/*.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
     "clean": "rimraf dist",
     "prestart": "npm run clean && npm run build",
-    "start": "func start"
+    "start": "func start",
+    "pretest": "npm run build",
+    "test": "node --test \"dist/test/**/*.test.js\""
   },
   "dependencies": {
     "@azure/functions": "^4.6.0",

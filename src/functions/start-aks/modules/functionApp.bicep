@@ -29,6 +29,21 @@ param funcSubnetId string
 @description('標籤')
 param tags object = {}
 
+@description('Function App 的 IANA 時區名稱')
+param timeZone string = 'Asia/Taipei'
+
+@description('主要啟動排程 (NCRONTAB)')
+param startSchedule string = '0 25,40 0 * * *'
+
+@description('保底啟動排程 (NCRONTAB)')
+param startFallbackSchedule string = '0 0 6 * * *'
+
+@description('停止排程 (NCRONTAB)')
+param stopSchedule string = '0 0 20 * * *'
+
+@description('是否啟用定時停止排程；false 時透過 AzureWebJobs.stopAks.Disabled=true 停用 stopAks 函式')
+param enableStopSchedule bool = false
+
 // ============================================================================
 // 變數
 // ============================================================================
@@ -102,8 +117,14 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
     name: 'appsettings'
     properties: {
       AzureWebJobsStorage__accountName: storageAccount.name
-      WEBSITE_TIME_ZONE: 'Asia/Taipei'
+      WEBSITE_TIME_ZONE: timeZone
       AKS_CLUSTERS: aksClustersJson
+      AKS_START_SCHEDULE: startSchedule
+      AKS_START_FALLBACK_SCHEDULE: startFallbackSchedule
+      AKS_STOP_SCHEDULE: stopSchedule
+      // 官方 app setting，用來停用/啟用特定函式；預設停用 stopAks，
+      // 需將 enableStopSchedule 設為 true 才會啟用定時停止排程
+      'AzureWebJobs.stopAks.Disabled': string(!enableStopSchedule)
     }
   }
 }

@@ -4,6 +4,10 @@
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "WEBSITE_TIME_ZONE": "Asia/Taipei",
-    "AKS_CLUSTERS": "[{\"subscriptionId\":\"your-subscription-id\",\"resourceGroup\":\"rg-ghrunner-prod\",\"name\":\"aks-ghrunner-prod\"}]"
+    "AKS_CLUSTERS": "[{\"subscriptionId\":\"your-subscription-id\",\"resourceGroup\":\"rg-ghrunner-prod\",\"name\":\"aks-ghrunner-prod\"}]",
+    "AKS_START_SCHEDULE": "0 25,40 0 * * *",
+    "AKS_START_FALLBACK_SCHEDULE": "0 0 6 * * *",
+    "AKS_STOP_SCHEDULE": "0 0 20 * * *",
+    "AzureWebJobs.stopAks.Disabled": "true"
   }
 }

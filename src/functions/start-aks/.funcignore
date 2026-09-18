@@ -1,5 +1,7 @@
 *.ts
 src/
+test/
+dist/test/
 .git*
 .vscode/
 local.settings.json
