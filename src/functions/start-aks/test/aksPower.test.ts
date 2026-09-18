@@ -9,12 +9,17 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DEFAULT_START_SCHEDULE_UTC,
   parseAksClusters,
   decideStartAction,
   decideStopAction,
   resolveSchedule,
   isStopScheduleEnabled,
 } from '../src/aksPower.js';
+
+test('fast-restart UTC default preserves 00:25/00:40 Asia/Taipei attempts', () => {
+  assert.equal(DEFAULT_START_SCHEDULE_UTC, '0 25,40 16 * * *');
+});
 
 describe('parseAksClusters', () => {
   test('解析合法的非空 JSON 陣列', () => {
@@ -214,16 +219,16 @@ describe('decideStopAction', () => {
 
 describe('resolveSchedule', () => {
   test('有設定值時使用該值', () => {
-    assert.equal(resolveSchedule('0 0 14 * * *', '0 0 22 * * *'), '0 0 14 * * *');
+    assert.equal(resolveSchedule('0 0 14 * * *', DEFAULT_START_SCHEDULE_UTC), '0 0 14 * * *');
   });
   test('未設定 (undefined) 時使用預設值', () => {
-    assert.equal(resolveSchedule(undefined, '0 0 22 * * *'), '0 0 22 * * *');
+    assert.equal(resolveSchedule(undefined, DEFAULT_START_SCHEDULE_UTC), '0 25,40 16 * * *');
   });
   test('空白字串時使用預設值', () => {
-    assert.equal(resolveSchedule('   ', '0 0 22 * * *'), '0 0 22 * * *');
+    assert.equal(resolveSchedule('   ', DEFAULT_START_SCHEDULE_UTC), '0 25,40 16 * * *');
   });
   test('前後有空白時會自動 trim', () => {
-    assert.equal(resolveSchedule('  0 0 14 * * *  ', '0 0 22 * * *'), '0 0 14 * * *');
+    assert.equal(resolveSchedule('  0 0 14 * * *  ', DEFAULT_START_SCHEDULE_UTC), '0 0 14 * * *');
   });
 });
 

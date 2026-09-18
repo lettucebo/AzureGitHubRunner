@@ -10,7 +10,7 @@
 
 | 功能 | 支援 | 說明 |
 |------|:----:|------|
-| 排程啟動 | ✅ | 單一 Timer Trigger `startAks`，預設 `0 0 22 * * *`（UTC） |
+| 排程啟動 | ✅ | 單一 Timer Trigger `startAks`，預設 `0 25,40 16 * * *`（UTC，台北時間 00:25/00:40） |
 | 排程停止 | ✅（預設停用，fail-closed） | `stopAks` Timer Trigger，預設 `0 0 14 * * *`（UTC）；需 `AKS_STOP_ENABLED` 精確為 `"true"`（不分大小寫、自動 trim）才會實際執行，否則在任何 Azure 呼叫之前就會被跳過 |
 | 排程可設定 | ✅ | 透過 `AKS_START_SCHEDULE_UTC` / `AKS_STOP_SCHEDULE_UTC` app setting 覆寫（皆為 UTC NCRONTAB）；未設定時回退為程式碼內建的相同預設值 |
 | 多叢集支援 | ✅ | 同時啟動/停止多個 AKS 叢集 |
@@ -26,8 +26,8 @@
 │                Azure Function App                  │
 │         (Linux Flex Consumption, Node.js 22)        │
 │                                                     │
-│  Timer: startAks（預設 0 0 22 * * * UTC =           │
-│          台北時間隔天 06:00）                        │
+│  Timer: startAks（預設 0 25,40 16 * * * UTC =       │
+│          台北時間隔天 00:25 與 00:40）                │
 │  Timer: stopAks（預設 0 0 14 * * * UTC =            │
 │          台北時間當天 22:00 —— 由 AKS_STOP_ENABLED   │
 │          把關，fail-closed）                         │
@@ -107,7 +107,7 @@ az aks show -g rg-ghrunner-prod -n aks-ghrunner-prod --query powerState.code
 | 變數 | 說明 | 預設值（未設定時） |
 |------|------|---------------------|
 | `AKS_CLUSTERS` | 目標叢集 JSON 陣列（必填，須為**非空**陣列） | 無預設值；缺少/無效 JSON/非陣列/空陣列 ⇒ 明確記錄錯誤且不呼叫任何 Azure API |
-| `AKS_START_SCHEDULE_UTC` | `startAks` Timer 的 NCRONTAB 排程（**UTC**） | `0 0 22 * * *`（UTC） |
+| `AKS_START_SCHEDULE_UTC` | `startAks` Timer 的 NCRONTAB 排程（**UTC**） | `0 25,40 16 * * *`（UTC） |
 | `AKS_STOP_SCHEDULE_UTC` | `stopAks` Timer 的 NCRONTAB 排程（**UTC**） | `0 0 14 * * *`（UTC） |
 | `AKS_STOP_ENABLED` | **啟用停止排程的唯一真實來源**。去除前後空白後，只有「精確等於」(不分大小寫) 字串 `"true"` 才視為啟用；缺少、空白、`"false"`，或任何其他值 ⇒ 停用 (fail-closed) | 未設定（⇒ 停用） |
 
@@ -120,8 +120,9 @@ Flex Consumption 的 Timer Trigger **一律以 UTC 解讀** NCRONTAB 表示式�
 - https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer#time-zones
 
 對操作者的影響：
-- 預設值（啟動 `0 0 22 * * *`／停止 `0 0 14 * * *`，皆為 UTC）分別對應**台北時間 (UTC+8) 06:00／22:00**，但啟動排程實際觸發時間是「前一個 UTC 曆日」的 22:00（例如 UTC 週一 22:00 → 台北時間週二 06:00）。
-- **星期欄位會跨越 UTC 曆日邊界。** 若需要以「特定當地星期」為錨點的排程（例如「每週一台北時間 06:00」），須注意台北時間週一 06:00 = UTC **週日** 22:00 —— 星期欄位必須以 UTC 的星期表示，而非當地星期。
+- 預設值（啟動 `0 25,40 16 * * *`／停止 `0 0 14 * * *`，皆為 UTC）分別對應**台北時間 (UTC+8) 00:25 與 00:40／22:00**。啟動嘗試實際於相對於當地時間的「前一個 UTC 曆日」16:25/16:40 觸發（例如 UTC 週一 16:25/16:40 → 台北時間週二 00:25/00:40）。
+- 兩次啟動嘗試保留公司約 00:05 強制停機後的 fast-restart 意圖：00:25 為主要嘗試，00:40 則在停止完成或設定傳播延遲時提供重試韌性。不另設無關的 06:00 fallback。
+- **星期欄位會跨越 UTC 曆日邊界。** 若需要以「特定當地星期」為錨點的排程（例如「每週一台北時間 00:25/00:40」），須注意台北時間週一 00:25/00:40 = UTC **週日** 16:25/16:40 —— 星期欄位必須以 UTC 的星期表示，而非當地星期。
 - **不會自動調整日光節約時間 (DST)。** 若目標時區實施 DST，操作者需自行在偏移量變動時更新 UTC NCRONTAB 表示式（`AKS_START_SCHEDULE_UTC` / `AKS_STOP_SCHEDULE_UTC`）；Azure Functions 不會自動平移。
 
 ### AKS_CLUSTERS 格式

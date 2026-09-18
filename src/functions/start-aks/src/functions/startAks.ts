@@ -2,7 +2,7 @@ import { app, InvocationContext, Timer } from '@azure/functions';
 import { DefaultAzureCredential } from '@azure/identity';
 import { ContainerServiceClient } from '@azure/arm-containerservice';
 import { runStartAks, type ClientFactory, type Logger } from '../aksOperations.js';
-import { resolveSchedule } from '../aksPower.js';
+import { DEFAULT_START_SCHEDULE_UTC, resolveSchedule } from '../aksPower.js';
 
 // ============================================================================
 // Timer Trigger — 定時啟動 AKS 叢集
@@ -32,10 +32,12 @@ async function startAks(myTimer: Timer, context: InvocationContext): Promise<voi
   await runStartAks({ aksClustersRaw: process.env.AKS_CLUSTERS }, clientFactory, logger);
 }
 
-// 預設 UTC 排程 0 0 22 * * * = 每日 UTC 22:00，對應台北時間 (UTC+8) 隔天
-// 06:00。Flex Consumption 的 Timer Trigger 一律以 UTC 解讀，詳見 README.md。
-// 可透過 AKS_START_SCHEDULE_UTC app setting 覆寫；未設定時回退為此預設值。
+// 預設 UTC 排程 0 25,40 16 * * * = 每日 UTC 16:25/16:40，對應台北時間
+// (UTC+8) 隔天 00:25/00:40。公司約 00:05 強制停機後保留兩次嘗試，
+// 以涵蓋停止/設定傳播延遲並提供重試韌性。Flex Consumption 的 Timer
+// Trigger 一律以 UTC 解讀，詳見 README.md。可透過
+// AKS_START_SCHEDULE_UTC app setting 覆寫；未設定時回退為此預設值。
 app.timer('startAks', {
-  schedule: resolveSchedule(process.env.AKS_START_SCHEDULE_UTC, '0 0 22 * * *'),
+  schedule: resolveSchedule(process.env.AKS_START_SCHEDULE_UTC, DEFAULT_START_SCHEDULE_UTC),
   handler: startAks,
 });

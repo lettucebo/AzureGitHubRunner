@@ -27,7 +27,9 @@ param tags = {
 // 排程與是否啟用停止採用預設值即可 (可省略，僅示範明確覆寫方式)
 // 重要: Flex Consumption 的 Timer Trigger 一律以 UTC 解讀 NCRONTAB，
 // 詳見 README.md「時區與排程」章節。
-param startScheduleUtc = '0 0 22 * * *'
+// UTC 16:25/16:40 = 台北時間隔天 00:25/00:40；兩次嘗試可涵蓋
+// 公司約 00:05 強制停機後的設定傳播延遲並提供重試韌性。
+param startScheduleUtc = '0 25,40 16 * * *'
 param stopScheduleUtc = '0 0 14 * * *'
 
 // 停止排程預設停用 (fail-closed)，確保部署後不會誤停正在使用中的叢集；

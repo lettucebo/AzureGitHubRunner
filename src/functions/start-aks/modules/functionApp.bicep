@@ -30,7 +30,7 @@ param funcSubnetId string
 param tags object = {}
 
 @description('啟動排程 (NCRONTAB，UTC)')
-param startScheduleUtc string = '0 0 22 * * *'
+param startScheduleUtc string = '0 25,40 16 * * *'
 
 @description('停止排程 (NCRONTAB，UTC)')
 param stopScheduleUtc string = '0 0 14 * * *'

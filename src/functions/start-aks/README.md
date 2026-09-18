@@ -10,7 +10,7 @@ An Azure Function that automatically starts (and, optionally, stops) AKS cluster
 
 | Feature | Support | Description |
 |---------|:------:|-------------|
-| Scheduled Start | ✅ | Single timer trigger `startAks`, default `0 0 22 * * *` UTC |
+| Scheduled Start | ✅ | Single timer trigger `startAks`, default `0 25,40 16 * * *` UTC (00:25/00:40 Asia/Taipei) |
 | Scheduled Stop | ✅ (disabled by default, fail-closed) | `stopAks` timer trigger, default `0 0 14 * * *` UTC; requires `AKS_STOP_ENABLED` to be exactly `"true"` (case-insensitive, trimmed) or it is skipped before any Azure call |
 | Configurable Schedules | ✅ | Override via `AKS_START_SCHEDULE_UTC` / `AKS_STOP_SCHEDULE_UTC` app settings (UTC NCRONTAB); falls back to the same defaults in code when unset |
 | Multiple Clusters | ✅ | Support starting/stopping multiple AKS clusters simultaneously |
@@ -26,8 +26,8 @@ An Azure Function that automatically starts (and, optionally, stops) AKS cluster
 │                Azure Function App                  │
 │         (Linux Flex Consumption, Node.js 22)        │
 │                                                     │
-│  Timer: startAks (default 0 0 22 * * * UTC =        │
-│          06:00 Taipei next day)                     │
+│  Timer: startAks (default 0 25,40 16 * * * UTC =    │
+│          00:25 & 00:40 Taipei next day)             │
 │  Timer: stopAks (default 0 0 14 * * * UTC =         │
 │          22:00 Taipei same day — gated by           │
 │          AKS_STOP_ENABLED, fail-closed)             │
@@ -107,7 +107,7 @@ az aks show -g rg-ghrunner-prod -n aks-ghrunner-prod --query powerState.code
 | Variable | Description | Default (when unset) |
 |----------|-------------|-----------------------|
 | `AKS_CLUSTERS` | JSON array of target clusters (required, must be a **nonempty** array) | — (no default; missing/invalid JSON/non-array/empty array ⇒ explicit error, no Azure calls) |
-| `AKS_START_SCHEDULE_UTC` | NCRONTAB schedule (**UTC**) for the `startAks` timer | `0 0 22 * * *` (UTC) |
+| `AKS_START_SCHEDULE_UTC` | NCRONTAB schedule (**UTC**) for the `startAks` timer | `0 25,40 16 * * *` (UTC) |
 | `AKS_STOP_SCHEDULE_UTC` | NCRONTAB schedule (**UTC**) for the `stopAks` timer | `0 0 14 * * *` (UTC) |
 | `AKS_STOP_ENABLED` | **The single source of truth** for enabling the stop schedule. Only a value that, after trimming whitespace, is *exactly* (case-insensitively) `"true"` enables it. Missing, empty, `"false"`, or any other value ⇒ disabled (fail-closed) | unset (⇒ disabled) |
 
@@ -120,8 +120,9 @@ Flex Consumption Timer Triggers are **always interpreted in UTC** — there is n
 - https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer#time-zones
 
 Implications for operators:
-- The defaults (`0 0 22 * * *` start / `0 0 14 * * *` stop, both UTC) correspond to **06:00 / 22:00 Asia/Taipei (UTC+8)** respectively — but the *start* schedule fires at UTC 22:00 on the **previous UTC calendar day** relative to the local 06:00 it produces (e.g. UTC Monday 22:00 → Taipei Tuesday 06:00).
-- **Day-of-week fields cross UTC calendar boundaries.** If you need a schedule anchored to a specific *local* weekday (e.g. "every local Monday 06:00"), remember that Asia/Taipei Monday 06:00 = UTC **Sunday** 22:00 — you must express the day-of-week field in UTC terms, not local terms.
+- The defaults (`0 25,40 16 * * *` start / `0 0 14 * * *` stop, both UTC) correspond to **00:25 and 00:40 / 22:00 Asia/Taipei (UTC+8)**. The start attempts fire at UTC 16:25/16:40 on the **previous UTC calendar day** relative to the local times they produce (e.g. UTC Monday 16:25/16:40 → Taipei Tuesday 00:25/00:40).
+- The two start attempts preserve the fast-restart intent after the company-enforced stop around 00:05: 00:25 is the primary attempt, while 00:40 provides retry resilience for stop completion or configuration propagation delays. There is no unrelated 06:00 fallback.
+- **Day-of-week fields cross UTC calendar boundaries.** If you need a schedule anchored to a specific *local* weekday (e.g. "every local Monday 00:25/00:40"), remember that Asia/Taipei Monday 00:25/00:40 = UTC **Sunday** 16:25/16:40 — you must express the day-of-week field in UTC terms, not local terms.
 - **DST is not automatically adjusted.** If your target time zone observes Daylight Saving Time, you are responsible for updating the UTC NCRONTAB expression (`AKS_START_SCHEDULE_UTC` / `AKS_STOP_SCHEDULE_UTC`) yourself when the offset changes; Azure Functions will not shift it for you.
 
 ### AKS_CLUSTERS Format

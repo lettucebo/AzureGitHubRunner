@@ -14,6 +14,8 @@ export interface AksClusterTarget {
   name: string;
 }
 
+export const DEFAULT_START_SCHEDULE_UTC = '0 25,40 16 * * *';
+
 /**
  * 解析 AKS_CLUSTERS 環境變數的結果。
  *
