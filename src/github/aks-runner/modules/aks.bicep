@@ -40,6 +40,26 @@ param runnerNodeMaxCount int = 5
 @description('Spot VM 最高競標價格 (-1 表示隨選價格)')
 param spotMaxPrice int = -1
 
+// Android Pool 配置 (原生 Android build 專用)
+@description('是否建立 Android Pool。原生 Android build 需要大量磁碟 (~200 GB 可用) 與較長執行時間')
+param enableAndroidPool bool = true
+
+@description('Android Pool VM 大小。原生 Android build 需較高 CPU 與記憶體')
+param androidNodeVmSize string = 'Standard_D8as_v5'
+
+@description('Android Pool 最小節點數')
+@minValue(0)
+param androidNodeMinCount int = 0
+
+@description('Android Pool 最大節點數')
+@minValue(1)
+@maxValue(10)
+param androidNodeMaxCount int = 8
+
+@description('Android Pool OS 磁碟大小 (GB)。Android SDK/NDK、Gradle cache 與 build artifacts 需要大量空間')
+@minValue(128)
+param androidNodeOsDiskSizeGb int = 256
+
 // 整合配置
 @description('Log Analytics Workspace ID (用於 Container Insights)')
 param logAnalyticsWorkspaceId string = ''
@@ -149,6 +169,46 @@ resource runnerNodePool 'Microsoft.ContainerService/managedClusters/agentPools@2
       'kubernetes.azure.com/scalesetpriority=spot:NoSchedule'
     ]
     
+    tags: tags
+  }
+}
+
+// Android Node Pool - 原生 Android build 專用
+// 注意: 使用一般 (非 Spot) 優先權，因為 Android release build 執行時間長 (可達 350 分鐘)，
+// 被 Spot 回收會導致整個 release 失敗。磁碟需 256 GB 以容納 Android SDK/NDK 與 Gradle cache。
+// dependsOn: AKS 不允許同時對同一叢集執行多個 agent pool 操作，必須與 runner pool 序列化，
+// 否則會出現 "Operation is not allowed because another operation is in progress" 部署錯誤。
+resource androidNodePool 'Microsoft.ContainerService/managedClusters/agentPools@2024-01-01' = if (enableAndroidPool) {
+  parent: aks
+  name: 'androidrel'
+  dependsOn: [
+    runnerNodePool
+  ]
+  properties: {
+    count: androidNodeMinCount
+    vmSize: androidNodeVmSize
+    osType: 'Linux'
+    mode: 'User'
+
+    osDiskSizeGB: androidNodeOsDiskSizeGb
+    osDiskType: 'Managed'
+
+    enableAutoScaling: true
+    minCount: androidNodeMinCount
+    maxCount: androidNodeMaxCount
+    scaleDownMode: 'Delete'
+
+    type: 'VirtualMachineScaleSets'
+    availabilityZones: []
+    maxPods: 30
+
+    nodeLabels: {
+      'nodepool-type': 'android'
+    }
+    nodeTaints: [
+      'workload=android:NoSchedule'
+    ]
+
     tags: tags
   }
 }
