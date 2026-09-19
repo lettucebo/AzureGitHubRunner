@@ -2,7 +2,12 @@
 // Azure Function — 定時啟動 AKS 叢集
 //
 // 部署一個 Azure Function App (Linux Flex Consumption Plan)，使用 Timer Trigger
-// 每天台北時間 06:00 自動啟動指定的 AKS 叢集。
+// 每天啟動指定的 AKS 叢集。預設排程為 UTC 16:25/16:40
+// (對應台北時間 UTC+8 隔天 00:25/00:40)。
+//
+// 重要: Flex Consumption 的 Timer Trigger 一律以 UTC 解讀 NCRONTAB 表示式，
+// 不支援 WEBSITE_TIME_ZONE/TZ；詳見 README.md「時區與排程」章節，
+// 以及 https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer#time-zones
 //
 // 透過 Managed Identity 認證，支援以 JSON 陣列參數同時啟動多台 AKS。
 // 使用 VNet Integration + Private Endpoint 存取 Storage Account，
@@ -44,6 +49,15 @@ param tags object = {
   environment: environment
   managedBy: 'bicep'
 }
+
+@description('啟動排程 (NCRONTAB，UTC)。Flex Consumption 的 Timer Trigger 一律以 UTC 解讀 (不支援 WEBSITE_TIME_ZONE/TZ)，預設值 0 25,40 16 * * * 對應台北時間 (UTC+8) 隔天 00:25/00:40；兩次嘗試用於涵蓋公司約 00:05 強制停機後的設定傳播延遲與重試韌性')
+param startScheduleUtc string = '0 25,40 16 * * *'
+
+@description('停止排程 (NCRONTAB，UTC)，僅在 enableStopSchedule=true 時實際生效。預設值 0 0 14 * * * 對應台北時間 (UTC+8) 當天 22:00')
+param stopScheduleUtc string = '0 0 14 * * *'
+
+@description('是否啟用定時停止排程。預設 false (停用)，避免部署後誤停正在使用中的叢集；需明確設為 true 才會啟用 stopAks 的實際停止動作 (fail-closed，由程式碼檢查 AKS_STOP_ENABLED，非僅依賴 Azure Functions 官方停用機制)')
+param enableStopSchedule bool = false
 
 // ============================================================================
 // 變數
@@ -119,6 +133,9 @@ module functionApp 'modules/functionApp.bicep' = {
     aksClustersJson: aksClustersJson
     funcSubnetId: network.outputs.funcSubnetId
     tags: tags
+    startScheduleUtc: startScheduleUtc
+    stopScheduleUtc: stopScheduleUtc
+    enableStopSchedule: enableStopSchedule
   }
 }
 
