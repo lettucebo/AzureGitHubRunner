@@ -72,15 +72,23 @@ jobs:
 
       - name: Assert entrypoint drops the PAT before exec
         run: |
-          if ! grep -q 'unset GITHUB_PAT' src/github/aca-runner/runner-image/entrypoint.sh; then
+          entrypoint_path="src/github/aca-runner/runner-image/entrypoint.sh"
+          unset_line="$(awk '/^[[:space:]]*unset[[:space:]]+GITHUB_PAT([[:space:]]|$)/ { print NR; exit }' "${entrypoint_path}")"
+          exec_line="$(awk '/^[[:space:]]*exec[[:space:]]+\.\/run\.sh([[:space:]]|$)/ { print NR; exit }' "${entrypoint_path}")"
+
+          if [ -z "${unset_line}" ]; then
             echo "❌ entrypoint.sh must unset GITHUB_PAT before exec"
             exit 1
           fi
-          if ! grep -q 'exec ./run.sh' src/github/aca-runner/runner-image/entrypoint.sh; then
+          if [ -z "${exec_line}" ]; then
             echo "❌ entrypoint.sh must exec run.sh so /proc/1/environ is rebuilt clean"
             exit 1
           fi
-          echo "✅ Credential handling assertions passed"
+          if [ "${unset_line}" -ge "${exec_line}" ]; then
+            echo "❌ entrypoint.sh must unset GITHUB_PAT before exec ./run.sh (unset line ${unset_line}, exec line ${exec_line})"
+            exit 1
+          fi
+          echo "✅ Credential handling assertions passed (unset line ${unset_line}, exec line ${exec_line})"
 
   validate-image:
     name: Validate Runner Image
@@ -165,4 +173,3 @@ jobs:
             exit 1
           fi
           echo "✅ All validations passed!"
-
