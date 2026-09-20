@@ -1,0 +1,168 @@
+name: CI - ACA GitHub Runner
+
+# =============================================================================
+# 驗證 src/github/aca-runner 的 Bicep、Shell 腳本與 Runner image
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/github/aca-runner/**'
+      - '.github/workflows/ci-aca.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/github/aca-runner/**'
+      - '.github/workflows/ci-aca.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-bicep:
+    name: Validate Bicep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bicep
+        run: |
+          az bicep install
+          az bicep version
+
+      - name: Bicep Build
+        run: |
+          echo "🔍 Validating Bicep syntax..."
+          cd src/github/aca-runner
+          az bicep build --file main.bicep --stdout > /dev/null
+          for module in modules/*.bicep; do
+            az bicep build --file "$module" --stdout > /dev/null
+          done
+          echo "✅ Bicep syntax is valid"
+
+      - name: Bicep Lint
+        run: |
+          cd src/github/aca-runner
+          az bicep lint --file main.bicep
+          echo "✅ Bicep linting passed"
+
+      - name: Validate parameter example
+        run: |
+          cd src/github/aca-runner
+          cp main.bicepparam.example validate.bicepparam
+          az bicep build-params --file validate.bicepparam --stdout > /dev/null
+          rm validate.bicepparam
+          echo "✅ Parameter example is valid"
+
+  validate-scripts:
+    name: Validate Shell Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck src/github/aca-runner/scripts/*.sh
+          shellcheck src/github/aca-runner/runner-image/*.sh
+          echo "✅ ShellCheck passed"
+
+      - name: Assert entrypoint drops the PAT before exec
+        run: |
+          if ! grep -q 'unset GITHUB_PAT' src/github/aca-runner/runner-image/entrypoint.sh; then
+            echo "❌ entrypoint.sh must unset GITHUB_PAT before exec"
+            exit 1
+          fi
+          if ! grep -q 'exec ./run.sh' src/github/aca-runner/runner-image/entrypoint.sh; then
+            echo "❌ entrypoint.sh must exec run.sh so /proc/1/environ is rebuilt clean"
+            exit 1
+          fi
+          echo "✅ Credential handling assertions passed"
+
+  validate-image:
+    name: Validate Runner Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert runner version is pinned
+        run: |
+          # shellcheck source=/dev/null
+          source src/github/aca-runner/runner-image/runner-version.env
+          if [ -z "${RUNNER_VERSION:-}" ] || [ -z "${RUNNER_SHA256:-}" ]; then
+            echo "❌ runner-version.env is incomplete"
+            exit 1
+          fi
+          if ! echo "${RUNNER_SHA256}" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "❌ RUNNER_SHA256 is not a valid sha256 digest"
+            exit 1
+          fi
+          echo "✅ Pinned to runner ${RUNNER_VERSION}"
+
+      - name: Build runner image
+        run: |
+          # shellcheck source=/dev/null
+          source src/github/aca-runner/runner-image/runner-version.env
+          docker build \
+            --build-arg "RUNNER_VERSION=${RUNNER_VERSION}" \
+            --build-arg "RUNNER_SHA256=${RUNNER_SHA256}" \
+            -t aca-github-runner:ci \
+            src/github/aca-runner/runner-image
+          echo "✅ Image built"
+
+      - name: Assert runner supports required flags
+        run: |
+          for flag in --ephemeral --no-default-labels --disableupdate; do
+            if ! grep -q -- "${flag}" src/github/aca-runner/runner-image/entrypoint.sh; then
+              echo "❌ entrypoint.sh does not pass ${flag}"
+              exit 1
+            fi
+          done
+          if ! grep -q -- 'config_args+=(--runnergroup "${RUNNER_GROUP}")' src/github/aca-runner/runner-image/entrypoint.sh; then
+            echo "❌ entrypoint.sh does not conditionally pass --runnergroup"
+            exit 1
+          fi
+          help_output="$(docker run --rm --entrypoint /bin/bash aca-github-runner:ci \
+            -c 'cd /home/runner/actions-runner && ./config.sh --help 2>&1' || true)"
+          for flag in --ephemeral --no-default-labels --runnergroup --disableupdate; do
+            if ! echo "${help_output}" | grep -q -- "${flag}"; then
+              echo "❌ config.sh does not support ${flag}"
+              exit 1
+            fi
+          done
+          echo "✅ Required runner flags are configured and supported"
+
+      - name: Assert image has no Docker daemon
+        run: |
+          if docker run --rm --entrypoint /bin/bash aca-github-runner:ci -c 'command -v dockerd'; then
+            echo "❌ Image unexpectedly contains dockerd"
+            exit 1
+          fi
+          echo "✅ No Docker daemon present"
+
+  summary:
+    name: Validation Summary
+    runs-on: ubuntu-latest
+    needs: [validate-bicep, validate-scripts, validate-image]
+    if: always()
+    steps:
+      - name: Check Results
+        run: |
+          echo "========================================"
+          echo "📋 ACA GitHub Runner - Validation Summary"
+          echo "========================================"
+          echo "Bicep:   ${{ needs.validate-bicep.result }}"
+          echo "Scripts: ${{ needs.validate-scripts.result }}"
+          echo "Image:   ${{ needs.validate-image.result }}"
+          echo "========================================"
+          if [ "${{ needs.validate-bicep.result }}" != "success" ] \
+            || [ "${{ needs.validate-scripts.result }}" != "success" ] \
+            || [ "${{ needs.validate-image.result }}" != "success" ]; then
+            echo "❌ Validation failed"
+            exit 1
+          fi
+          echo "✅ All validations passed!"
+
