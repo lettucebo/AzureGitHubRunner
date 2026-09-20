@@ -4,6 +4,7 @@
 
 # Bicep 參數檔案 (包含敏感資料)
 src/aks-runner/main.bicepparam
+src/github/aca-runner/main.bicepparam
 *.parameters.json
 
 # ARC Runner 配置檔案 (包含個人設定)

@@ -1,0 +1,40 @@
+using './main.bicep'
+
+// ============================================================================
+// 階段 A：以此設定部署基礎設施（enableRunnerJobs = false）
+// 階段 B：寫入 Key Vault secret 並推送 image 後，改為 true 並填入 runnerImage
+// ============================================================================
+
+param environment = 'prod'
+param projectName = 'acarunner'
+param location = 'eastasia'
+
+param githubOwner = 'MoneyForge'
+param repositories = [
+  'Mone'
+  'SmartHome'
+  'TriageApp'
+]
+
+// GitHub Free 只有 Default runner group，升級 Team 後才可改為自訂群組名稱
+param runnerGroup = ''
+
+// 啟用 RBAC 的 Key Vault 不會自動給 Owner data-plane 寫入權限。
+// 取得方式: az ad signed-in-user show --query id -o tsv
+param secretsOfficerPrincipalId = ''
+
+param logRetentionDays = 30
+param logDailyQuotaGb = 1
+
+// --- 階段 B ---
+param enableRunnerJobs = false
+param enableCopilotJob = false
+param runnerImage = ''
+
+param generalReplicaTimeoutSeconds = 3600
+param copilotReplicaTimeoutSeconds = 7200
+param generalMaxExecutions = 20
+param copilotMaxExecutions = 20
+
+param runnerCpu = '2.0'
+param runnerMemory = '4.0Gi'
