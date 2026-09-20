@@ -16,14 +16,14 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 RESOURCE_GROUP="${RESOURCE_GROUP:-}"
 JOB_NAME="${JOB_NAME:-}"
 failures=0
-last_query_failed=0
+JOB_JSON=""
 
 usage() {
     cat <<'EOF'
@@ -35,7 +35,7 @@ usage() {
 
 說明:
   1. 檢查 triggerType、minExecutions、noDefaultLabels、runnerScope
-  2. 確認 image 不可使用 latest
+  2. 確認 image 使用明確且非 latest 的 tag，或 @sha256 digest
   3. 列出 executions 供人工檢視
 EOF
 }
@@ -46,23 +46,6 @@ require_command() {
         log_error "❌ 找不到 ${command_name}，請先安裝"
         exit 1
     fi
-}
-
-query_az() {
-    local description="$1"
-    shift
-
-    local output
-    last_query_failed=0
-    if ! output="$("$@" 2>&1)"; then
-        log_error "❌ ${description} 失敗: ${output}"
-        failures=$((failures + 1))
-        last_query_failed=1
-        printf ''
-        return 0
-    fi
-
-    printf '%s' "${output}"
 }
 
 to_lower() {
@@ -82,6 +65,65 @@ check_equal() {
     fi
 }
 
+extract_job_field() {
+    local field_name="$1"
+    local filter="$2"
+    local value
+
+    if ! value="$(printf '%s' "${JOB_JSON}" | jq -er "${filter}")"; then
+        log_error "❌ 解析 ${field_name} 失敗"
+        return 1
+    fi
+
+    printf '%s' "${value}"
+}
+
+check_image_reference() {
+    local image="$1"
+    local last_segment
+    local tag
+    local image_lower
+    local image_name
+    local digest
+
+    if [ -z "${image}" ]; then
+        log_error "❌ image 不可為空"
+        failures=$((failures + 1))
+        return
+    fi
+
+    if [[ "${image}" == *@sha256:* ]]; then
+        image_name="${image%@sha256:*}"
+        digest="${image##*@sha256:}"
+        if [ -n "${image_name}" ] && [ -n "${digest}" ]; then
+            log_info "✓ image: ${image}"
+        else
+            log_error "❌ image digest 格式無效: ${image}"
+            failures=$((failures + 1))
+        fi
+        return
+    fi
+
+    last_segment="${image##*/}"
+    if [[ "${last_segment}" != *:* ]]; then
+        log_error "❌ image 必須指定明確 tag 或 @sha256 digest: ${image}"
+        failures=$((failures + 1))
+        return
+    fi
+
+    tag="${last_segment##*:}"
+    image_lower="$(to_lower "${tag}")"
+    if [ -z "${tag}" ]; then
+        log_error "❌ image tag 不可為空: ${image}"
+        failures=$((failures + 1))
+    elif [ "${image_lower}" = "latest" ]; then
+        log_error "❌ image 禁止使用 latest tag: ${image}"
+        failures=$((failures + 1))
+    else
+        log_info "✓ image: ${image}"
+    fi
+}
+
 main() {
     if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
         usage
@@ -89,6 +131,7 @@ main() {
     fi
 
     require_command az
+    require_command jq
 
     if [ -z "${RESOURCE_GROUP}" ] || [ -z "${JOB_NAME}" ]; then
         log_error "❌ 必須設定 RESOURCE_GROUP 與 JOB_NAME"
@@ -96,87 +139,36 @@ main() {
     fi
 
     log_step "步驟 1/3: 讀取 Job 設定..."
+    if ! JOB_JSON="$(az containerapp job show \
+        --resource-group "${RESOURCE_GROUP}" \
+        --name "${JOB_NAME}" \
+        --only-show-errors \
+        -o json)"; then
+        log_error "❌ 讀取 Job 設定失敗"
+        exit 1
+    fi
+
     local trigger_type
     local min_executions
     local no_default_labels
     local runner_scope
     local image
 
-    trigger_type="$(
-        query_az \
-            "triggerType" \
-            az containerapp job show \
-            --resource-group "${RESOURCE_GROUP}" \
-            --name "${JOB_NAME}" \
-            --only-show-errors \
-            --query 'properties.configuration.triggerType' \
-            -o tsv
-    )"
-    if [ "${last_query_failed}" -eq 0 ]; then
-        check_equal "triggerType" "Event" "${trigger_type}"
-    fi
+    if ! trigger_type="$(extract_job_field "triggerType" '.properties.configuration.triggerType')"; then exit 1; fi
+    check_equal "triggerType" "Event" "${trigger_type}"
 
-    min_executions="$(
-        query_az \
-            "minExecutions" \
-            az containerapp job show \
-            --resource-group "${RESOURCE_GROUP}" \
-            --name "${JOB_NAME}" \
-            --only-show-errors \
-            --query 'properties.configuration.eventTriggerConfig.scale.minExecutions' \
-            -o tsv
-    )"
-    if [ "${last_query_failed}" -eq 0 ]; then
-        check_equal "minExecutions" "0" "${min_executions}"
-    fi
+    if ! min_executions="$(extract_job_field "minExecutions" '.properties.configuration.eventTriggerConfig.scale.minExecutions')"; then exit 1; fi
+    check_equal "minExecutions" "0" "${min_executions}"
 
-    no_default_labels="$(
-        query_az \
-            "noDefaultLabels" \
-            az containerapp job show \
-            --resource-group "${RESOURCE_GROUP}" \
-            --name "${JOB_NAME}" \
-            --only-show-errors \
-            --query 'properties.configuration.eventTriggerConfig.scale.rules[0].metadata.noDefaultLabels' \
-            -o tsv
-    )"
-    if [ "${last_query_failed}" -eq 0 ]; then
-        check_equal "noDefaultLabels" "true" "${no_default_labels}"
-    fi
+    if ! no_default_labels="$(extract_job_field "noDefaultLabels" '.properties.configuration.eventTriggerConfig.scale.rules[0].metadata.noDefaultLabels')"; then exit 1; fi
+    check_equal "noDefaultLabels" "true" "${no_default_labels}"
 
-    runner_scope="$(
-        query_az \
-            "runnerScope" \
-            az containerapp job show \
-            --resource-group "${RESOURCE_GROUP}" \
-            --name "${JOB_NAME}" \
-            --only-show-errors \
-            --query 'properties.configuration.eventTriggerConfig.scale.rules[0].metadata.runnerScope' \
-            -o tsv
-    )"
-    if [ "${last_query_failed}" -eq 0 ]; then
-        check_equal "runnerScope" "org" "${runner_scope}"
-    fi
+    if ! runner_scope="$(extract_job_field "runnerScope" '.properties.configuration.eventTriggerConfig.scale.rules[0].metadata.runnerScope')"; then exit 1; fi
+    check_equal "runnerScope" "org" "${runner_scope}"
 
     log_step "步驟 2/3: 檢查 image 是否避免 latest..."
-    image="$(
-        query_az \
-            "image" \
-            az containerapp job show \
-            --resource-group "${RESOURCE_GROUP}" \
-            --name "${JOB_NAME}" \
-            --only-show-errors \
-            --query 'properties.template.containers[0].image' \
-            -o tsv
-    )"
-    if [ "${last_query_failed}" -eq 0 ]; then
-        if [[ "${image}" == *":latest" ]]; then
-            log_error "❌ image 使用 latest tag: ${image}"
-            failures=$((failures + 1))
-        else
-            log_info "✓ image: ${image}"
-        fi
-    fi
+    if ! image="$(extract_job_field "image" '.properties.template.containers[0].image')"; then exit 1; fi
+    check_image_reference "${image}"
 
     log_step "步驟 3/3: 列出 executions..."
     if ! az containerapp job execution list \
@@ -185,8 +177,7 @@ main() {
         --only-show-errors \
         --output table \
         --query '[].{Name:name, Status:properties.status, StartTime:properties.startTime, EndTime:properties.endTime}'; then
-        log_error "❌ 列出 executions 失敗"
-        failures=$((failures + 1))
+        log_warn "⚠️ 無法取得 executions 清單（不影響整體驗證）"
     fi
 
     if [ "${failures}" -gt 0 ]; then
