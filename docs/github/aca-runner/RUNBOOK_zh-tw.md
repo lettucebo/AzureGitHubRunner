@@ -43,6 +43,7 @@ ACA 採**逐 repo、逐 workflow**漸進導入，而非一次性切換：
 - [ ] self-hosted Copilot 必須關閉 GitHub 內建 firewall
 - [ ] 本方案**不做**網路 egress 過濾，Copilot job 可自由連往公開網際網路（與 GitHub-hosted runner 相同）
 - [ ] 補償措施：平台代管網路不連接任何自有 VNet（無內部網路存取）、`--ephemeral` 單次執行、僅服務 private repos、PAT 最小權限並定期輪替
+- [ ] runner Job 掛載的 user-assigned managed identity 已透過 `identitySettings`（`lifecycle: 'None'`，見 `modules/runnerJob.bicep`）限定範圍，runner 的 main container 無法呼叫 Container Apps identity endpoint 換發該身分的 token；該身分僅供平台用於 ACR image pull 與 Key Vault secret 解析
 
 ## PoC 驗收記錄表
 
@@ -53,6 +54,7 @@ ACA 採**逐 repo、逐 workflow**漸進導入，而非一次性切換：
 | peak ephemeral storage | | < 8 GiB |
 | `runs-on: self-hosted` 未被 ACA runner 取走 | | true |
 | job 內 `printenv` 與 `/proc/1/environ` 皆無 `GITHUB_PAT` | | true |
+| 已部署 runner Job 掛載的 UAMI，其 `identitySettings` lifecycle 為 `None`（由 `scripts/verify-aca-runner.sh` 驗證） | | true |
 | GitHub API rate limit 用量 | | < 40% |
 
 ---

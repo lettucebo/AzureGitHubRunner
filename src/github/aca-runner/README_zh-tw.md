@@ -55,6 +55,8 @@ GitHub Actions queue
 
 兩個 Job 共用同一個 environment、managed identity、image 與 secret 來源，只差 `runnerLabel` 與 `replicaTimeout`。Runner image 內沒有 Docker daemon，需要 Docker/container 的 workflow 必須直接指定 GitHub-hosted runner，不應假設有任何自動 fallback。
 
+兩個 Job 掛載的 user-assigned managed identity 透過 `identitySettings`（`lifecycle: 'None'`，見 `modules/runnerJob.bicep`）限定僅供平台使用——即 ACR image pull 與 Key Vault secret 解析——runner 的 main container **無法**透過 Container Apps identity endpoint 取得該身分的 token。此設計可防止 runner 工作負載程式碼另外換發該身分的 token，重新直接讀取 Key Vault 中的 GitHub PAT。詳見 [Control managed identity availability](https://learn.microsoft.com/en-us/azure/container-apps/managed-identity#control-managed-identity-availability)。
+
 ## 💰 成本估算
 
 | 組件 | 計算基礎 | 月成本 |
@@ -95,7 +97,7 @@ az deployment sub create --location eastasia \
   --template-file main.bicep --parameters main.bicepparam
 ```
 
-部署完成後，先執行 `scripts/verify-aca-runner.sh`（見[目錄結構](#-目錄結構)）確認 `triggerType`、`minExecutions`、`noDefaultLabels`、`runnerScope` 與 image tag，再導入任何實際 workflow 流量。
+部署完成後，先執行 `scripts/verify-aca-runner.sh`（見[目錄結構](#-目錄結構)）確認 `triggerType`、`minExecutions`、`noDefaultLabels`、`runnerScope`、掛載 UAMI 的 `identitySettings` lifecycle（`None`）與 image tag，再導入任何實際 workflow 流量。
 
 ## 🔍 故障排除
 
@@ -126,6 +128,15 @@ az deployment sub create --location eastasia \
 ### `az keyvault secret set` 回傳 403
 
 - 部署者（而非 managed identity）缺少 `Key Vault Secrets Officer`。可手動授予，或在 `main.bicepparam` 設定 `secretsOfficerPrincipalId` 後重新部署。
+
+### `identitySettings` lifecycle 偏離 `None`
+
+- 若掛載的 UAMI 之 `identitySettings` lifecycle 不是 `None`，`scripts/verify-aca-runner.sh` 步驟 2/4 會失敗。非 `None` 的值代表 runner 的 main container 可能可以呼叫 Container Apps identity endpoint，換發該身分的 token，再直接讀取 Key Vault 中的 PAT。
+  ```bash
+  az containerapp job show -g <rg> -n <jobName> \
+    --query "properties.configuration.identitySettings"
+  ```
+- 請從 `main.bicep`／`modules/runnerJob.bicep`（需 `Microsoft.App/jobs` API 版本 `2025-01-01` 以上）重新部署以還原 `lifecycle: 'None'`；不要在原始碼控管之外手動修改此設定。
 
 ### Replica 在 job 完成前提早結束
 

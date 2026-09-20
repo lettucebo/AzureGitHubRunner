@@ -11,6 +11,16 @@
 //   - repos 明確列出：避免列舉整個 org 造成 API 呼叫暴增
 //   - enableEtags=true：304 回應不計入 rate limit
 //   - 省略 githubApiURL：使用 scaler 預設值，避免 metadata 大小寫歧義
+//
+// 安全設定 (identitySettings)：
+//   - 掛載的 UAMI 僅供平台用途：registries[].identity 拉取 ACR image、
+//     secrets[].identity 由平台解析 Key Vault GitHub PAT 後以 secretRef 注入環境變數。
+//   - identitySettings 將該 UAMI 的 lifecycle 設為 'None'，停用 main container 對
+//     IDENTITY_ENDPOINT 的存取，避免 runner 容器內的程式碼另外取得該 UAMI 的
+//     Azure AD token，重新以該身分呼叫 Key Vault 讀取 PAT 或存取其他被授權資源。
+//   - 需要 Microsoft.App/jobs 穩定 API (2025-01-01 起) 才支援 identitySettings。
+//   - 參考: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity#control-managed-identity-availability
+//         https://learn.microsoft.com/en-us/azure/templates/microsoft.app/2025-01-01/jobs
 // ============================================================================
 
 @description('部署位置')
@@ -84,7 +94,7 @@ param runnerMemory string = '4.0Gi'
 @description('標籤')
 param tags object = {}
 
-resource runnerJob 'Microsoft.App/jobs@2024-03-01' = {
+resource runnerJob 'Microsoft.App/jobs@2025-01-01' = {
   name: jobName
   location: location
   tags: tags
@@ -101,6 +111,16 @@ resource runnerJob 'Microsoft.App/jobs@2024-03-01' = {
       triggerType: 'Event'
       replicaTimeout: replicaTimeoutSeconds
       replicaRetryLimit: 0
+      // UAMI 只供平台用於 ACR image pull 與 Key Vault secret 解析（見 registries/secrets 的 identity）。
+      // lifecycle=None 會停用 main container 對此 UAMI 的 identity endpoint 存取，
+      // 避免 runner 容器內程式碼另外呼叫 IDENTITY_ENDPOINT 取得 token 重新讀取 Key Vault PAT。
+      // 參考: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity#control-managed-identity-availability
+      identitySettings: [
+        {
+          identity: identityResourceId
+          lifecycle: 'None'
+        }
+      ]
       eventTriggerConfig: {
         parallelism: 1
         replicaCompletionCount: 1

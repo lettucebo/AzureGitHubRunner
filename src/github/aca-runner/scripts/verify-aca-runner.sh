@@ -35,8 +35,10 @@ usage() {
 
 說明:
   1. 檢查 triggerType、minExecutions、noDefaultLabels、runnerScope
-  2. 確認 image 使用明確且非 latest 的 tag，或 @sha256 digest
-  3. 列出 executions 供人工檢視
+  2. 確認掛載的 UAMI 之 identitySettings lifecycle 為 None
+     (main container 不得透過 identity endpoint 取得該身分並重新讀取 Key Vault PAT)
+  3. 確認 image 使用明確且非 latest 的 tag，或 @sha256 digest
+  4. 列出 executions 供人工檢視
 EOF
 }
 
@@ -76,6 +78,32 @@ extract_job_field() {
     fi
 
     printf '%s' "${value}"
+}
+
+# 確認 Job 掛載的 UAMI 之 identitySettings lifecycle 為 None。
+# 以 .identity.userAssignedIdentities 實際掛載的 identity 為準做對應，
+# 不得只檢查 identitySettings 清單中任意一筆，避免漏掉真正被掛載但設定錯誤的身分。
+check_identity_lifecycle() {
+    local identity_key
+    local lifecycle
+
+    if ! identity_key="$(printf '%s' "${JOB_JSON}" | jq -er '.identity.userAssignedIdentities | keys[0] // empty')"; then
+        log_error "❌ Job 未掛載任何 user-assigned managed identity"
+        failures=$((failures + 1))
+        return
+    fi
+
+    if ! lifecycle="$(printf '%s' "${JOB_JSON}" | jq -er --arg key "$(to_lower "${identity_key}")" '
+        (.properties.configuration.identitySettings // [])
+        | map(select((.identity | ascii_downcase) == $key))
+        | (.[0].lifecycle // "MISSING")
+    ')"; then
+        log_error "❌ 解析 identitySettings 失敗"
+        failures=$((failures + 1))
+        return
+    fi
+
+    check_equal "identitySettings[UAMI].lifecycle" "None" "${lifecycle}"
 }
 
 check_image_reference() {
@@ -138,7 +166,7 @@ main() {
         exit 1
     fi
 
-    log_step "步驟 1/3: 讀取 Job 設定..."
+    log_step "步驟 1/4: 讀取 Job 設定..."
     if ! JOB_JSON="$(az containerapp job show \
         --resource-group "${RESOURCE_GROUP}" \
         --name "${JOB_NAME}" \
@@ -166,11 +194,14 @@ main() {
     if ! runner_scope="$(extract_job_field "runnerScope" '.properties.configuration.eventTriggerConfig.scale.rules[0].metadata.runnerScope')"; then exit 1; fi
     check_equal "runnerScope" "org" "${runner_scope}"
 
-    log_step "步驟 2/3: 檢查 image 是否避免 latest..."
+    log_step "步驟 2/4: 確認 UAMI identitySettings lifecycle 為 None..."
+    check_identity_lifecycle
+
+    log_step "步驟 3/4: 檢查 image 是否避免 latest..."
     if ! image="$(extract_job_field "image" '.properties.template.containers[0].image')"; then exit 1; fi
     check_image_reference "${image}"
 
-    log_step "步驟 3/3: 列出 executions..."
+    log_step "步驟 4/4: 列出 executions..."
     if ! az containerapp job execution list \
         --resource-group "${RESOURCE_GROUP}" \
         --name "${JOB_NAME}" \

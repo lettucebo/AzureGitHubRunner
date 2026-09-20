@@ -43,6 +43,7 @@ ACA adoption proceeds **repo-by-repo and workflow-by-workflow**, not as a single
 - [ ] Self-hosted Copilot requires disabling GitHub's built-in firewall
 - [ ] This design does **not** perform network egress filtering; a Copilot job can reach the public internet freely (same as a GitHub-hosted runner)
 - [ ] Compensating controls: the platform-managed network is not attached to any own VNet (no internal network access), `--ephemeral` single-use execution, private repositories only, PAT has minimal scope and is rotated regularly
+- [ ] The user-assigned managed identity mounted on the runner Job is scoped via `identitySettings` (`lifecycle: 'None'`, see `modules/runnerJob.bicep`) so the runner's main container cannot reach the Container Apps identity endpoint and mint its own token for that identity; it remains usable only by the platform for ACR image pull and Key Vault secret resolution
 
 ## PoC Acceptance Record Table
 
@@ -53,6 +54,7 @@ ACA adoption proceeds **repo-by-repo and workflow-by-workflow**, not as a single
 | Peak ephemeral storage | | < 8 GiB |
 | `runs-on: self-hosted` jobs are not intercepted by the ACA runner | | true |
 | `printenv` and `/proc/1/environ` inside the job contain no `GITHUB_PAT` | | true |
+| Deployed runner Job's mounted UAMI has `identitySettings` lifecycle `None` (verified by `scripts/verify-aca-runner.sh`) | | true |
 | GitHub API rate limit usage | | < 40% |
 
 ---

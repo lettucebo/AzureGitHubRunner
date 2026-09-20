@@ -55,6 +55,8 @@ GitHub Actions queue
 
 Both jobs share the same environment, managed identity, image, and secret source; they only differ in `runnerLabel` and `replicaTimeout`. There is no Docker daemon in the runner image, so workflows that need Docker/containers must target a GitHub-hosted runner directly instead of relying on any fallback.
 
+The user-assigned managed identity mounted on both Jobs is scoped with `identitySettings` (`lifecycle: 'None'`, see `modules/runnerJob.bicep`) so it is available to the platform only — ACR image pull and Key Vault secret resolution — and is **not** reachable from the runner's main container via the Container Apps identity endpoint. This stops runner workload code from minting its own token for this identity and re-reading the Key Vault GitHub PAT directly. See [Control managed identity availability](https://learn.microsoft.com/en-us/azure/container-apps/managed-identity#control-managed-identity-availability).
+
 ## 💰 Cost Estimate
 
 | Component | Basis | Monthly Cost |
@@ -95,7 +97,7 @@ az deployment sub create --location eastasia \
   --template-file main.bicep --parameters main.bicepparam
 ```
 
-After deployment, run `scripts/verify-aca-runner.sh` (see [Directory Structure](#-directory-structure)) to confirm `triggerType`, `minExecutions`, `noDefaultLabels`, `runnerScope`, and the image tag before routing any real workflow traffic.
+After deployment, run `scripts/verify-aca-runner.sh` (see [Directory Structure](#-directory-structure)) to confirm `triggerType`, `minExecutions`, `noDefaultLabels`, `runnerScope`, the mounted UAMI's `identitySettings` lifecycle (`None`), and the image tag before routing any real workflow traffic.
 
 ## 🔍 Troubleshooting
 
@@ -126,6 +128,15 @@ After deployment, run `scripts/verify-aca-runner.sh` (see [Directory Structure](
 ### `az keyvault secret set` returns 403
 
 - The deployer (not the managed identity) is missing `Key Vault Secrets Officer`. Either grant it manually or set `secretsOfficerPrincipalId` in `main.bicepparam` and redeploy.
+
+### `identitySettings` lifecycle drifted from `None`
+
+- `scripts/verify-aca-runner.sh` step 2/4 fails if the mounted UAMI's `identitySettings` lifecycle is not `None`. A non-`None` value would let the runner's main container reach the Container Apps identity endpoint and mint its own token for that identity, then re-read the Key Vault PAT directly.
+  ```bash
+  az containerapp job show -g <rg> -n <jobName> \
+    --query "properties.configuration.identitySettings"
+  ```
+- Redeploy from `main.bicep`/`modules/runnerJob.bicep` (requires `Microsoft.App/jobs` API version `2025-01-01` or later) to restore `lifecycle: 'None'`. Do not edit this setting manually outside of source control.
 
 ### Replica ends before the job finishes
 
