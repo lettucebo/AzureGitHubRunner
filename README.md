@@ -15,14 +15,15 @@ A complete solution for deploying Self-hosted Runners/Agents on Azure, supportin
 
 ---
 
-## 📦 Four Deployment Options
+## 📦 Deployment Options
 
 ### GitHub Actions Runners
 
 | Solution | Use Case | Technology | Scalability | Cost |
 |----------|----------|------------|-------------|------|
 | **[GitHub VM Runner](src/github/vm-runner/)** | Simple projects, fixed workload | Terraform | Fixed instances | 💰 |
-| **[GitHub AKS Runner](src/github/aks-runner/)** | Copilot Agent, dynamic workload | Bicep + ARC | Auto-scale 0-N | 💰💰 |
+| **[GitHub AKS Runner](src/github/aks-runner/)** | Copilot Agent, dynamic workload — **current fallback platform, stays running** | Bicep + ARC | Auto-scale 0-N | 💰💰 |
+| **[GitHub ACA Runner](src/github/aca-runner/)** | General CI + Copilot cloud agent, gradual repo-by-repo/workflow-by-workflow validation (no Docker) | Bicep + Container Apps Jobs | Auto-scale 0-N, event-driven, scale-to-zero | 💰 |
 
 ### Azure DevOps Pipeline Agents
 
@@ -73,6 +74,28 @@ src/github/aks-runner/   # Bicep infrastructure
 - ✅ Uses official GitHub Runner Image
 
 📖 **Documentation**: [docs/github/aks-runner/](docs/github/aks-runner/)
+
+---
+
+## ⚡ GitHub ACA Runner (Bicep + Container Apps Jobs)
+
+An event-driven, scale-to-zero alternative being adopted **gradually, repo-by-repo and workflow-by-workflow**. The AKS Runner above remains the current fallback and keeps running unchanged during this rollout — see the runbook before any live deployment or cutover.
+
+```
+src/github/aca-runner/   # Bicep infrastructure
+├── main.bicep           # Two-phase deployment (infra, then runner jobs)
+├── modules/              # ACR/Key Vault/Identity/ACA env/runner job modules
+├── runner-image/         # Ephemeral runner Dockerfile + entrypoint
+└── scripts/              # Build, version pin, post-deploy verification
+```
+
+### Features
+- ✅ Scale to zero (`minExecutions: 0`), no idle compute charge
+- ✅ Supports general CI (`aca-general`) and GitHub Copilot cloud agent (`aca-copilot`)
+- ❌ No Docker/container jobs, no local disk above 8 GiB — route those to a GitHub-hosted runner
+- ⚠️ Requires RUNBOOK Gate A/B approval before any live deployment or Copilot cutover
+
+📖 **Documentation**: [src/github/aca-runner/README.md](src/github/aca-runner/README.md) · [Runbook](docs/github/aca-runner/RUNBOOK.md)
 
 ---
 
@@ -132,7 +155,8 @@ src/azure-devops/aks-runner/  # Bicep infrastructure
 ├── src/
 │   ├── github/                     # GitHub Actions Solutions
 │   │   ├── vm-runner/              # Terraform VM runner
-│   │   └── aks-runner/             # Bicep AKS runner (ARC)
+│   │   ├── aks-runner/             # Bicep AKS runner (ARC) — current fallback
+│   │   └── aca-runner/             # Bicep ACA runner (Container Apps Jobs) — gradual rollout
 │   ├── azure-devops/               # Azure DevOps Solutions
 │   │   ├── vm-runner/              # Terraform VM agent
 │   │   └── aks-runner/             # Bicep AKS agent (KEDA)
@@ -142,7 +166,8 @@ src/azure-devops/aks-runner/  # Bicep infrastructure
 └── docs/
     ├── github/                     # GitHub solutions documentation
     │   ├── vm-runner/
-    │   └── aks-runner/
+    │   ├── aks-runner/
+    │   └── aca-runner/              # RUNBOOK.md / RUNBOOK_zh-tw.md
     └── azure-devops/               # Azure DevOps solutions documentation
         ├── vm-runner/
         └── aks-runner/
@@ -173,6 +198,18 @@ az deployment sub create --location eastasia --template-file main.bicep --parame
 ./scripts/install-arc.sh
 ```
 
+### GitHub ACA Runner (Gradual rollout, approval required)
+
+> ⚠️ This is not a "run it now" quick start. Live deployment requires RUNBOOK Gate A sign-off first (Gate B for Copilot). See [src/github/aca-runner/README.md](src/github/aca-runner/README.md) and [docs/github/aca-runner/RUNBOOK.md](docs/github/aca-runner/RUNBOOK.md) for the full approval sequence.
+
+```bash
+cd src/github/aca-runner
+cp main.bicepparam.example main.bicepparam
+# Phase A: deploy infrastructure only (enableRunnerJobs=false)
+az deployment sub create --location eastasia --template-file main.bicep --parameters main.bicepparam
+# Write the PAT, build the runner image, then Phase B with enableRunnerJobs=true
+```
+
 ### Azure DevOps VM Agent (Simple)
 
 ```bash
@@ -200,16 +237,17 @@ kubectl apply -f kubernetes/
 
 ## 📊 Solution Comparison
 
-| Feature | GitHub VM | GitHub AKS | Azure DevOps VM | Azure DevOps AKS |
-|---------|:---------:|:----------:|:---------------:|:----------------:|
-| Platform | GitHub Actions | GitHub Actions | Azure Pipelines | Azure Pipelines |
-| Technology | Terraform | Bicep + ARC | Terraform | Bicep + KEDA |
-| Auto-scaling | ❌ | ✅ | ❌ | ✅ |
-| Scale to Zero | ❌ | ✅ | ❌ | ✅ |
-| Copilot Agent | ❌ | ✅ | N/A | N/A |
-| Spot VM Support | ✅ | ✅ | ✅ | ✅ |
-| Idle Cost | ~$29/mo | ~$60/mo | ~$29/mo | ~$40/mo |
-| Complexity | Simple | Moderate | Simple | Moderate |
+| Feature | GitHub VM | GitHub AKS | GitHub ACA | Azure DevOps VM | Azure DevOps AKS |
+|---------|:---------:|:----------:|:----------:|:---------------:|:----------------:|
+| Platform | GitHub Actions | GitHub Actions | GitHub Actions | Azure Pipelines | Azure Pipelines |
+| Technology | Terraform | Bicep + ARC | Bicep + Container Apps Jobs | Terraform | Bicep + KEDA |
+| Auto-scaling | ❌ | ✅ | ✅ (event-driven) | ❌ | ✅ |
+| Scale to Zero | ❌ | ❌ (system pool fixed) | ✅ | ❌ | ✅ |
+| Copilot Agent | ❌ | ✅ (current fallback) | ✅ (gradual rollout, see RUNBOOK) | N/A | N/A |
+| Docker/container jobs | ✅ | ✅ | ❌ | ✅ | ✅ |
+| Spot VM Support | ✅ | ✅ | N/A | ✅ | ✅ |
+| Idle Cost | ~$29/mo | ~$130–150/mo | ~$5–7/mo | ~$29/mo | ~$40/mo |
+| Complexity | Simple | Moderate | Moderate | Simple | Moderate |
 
 ---
 

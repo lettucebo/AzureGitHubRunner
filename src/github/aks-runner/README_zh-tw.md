@@ -15,6 +15,8 @@
 | 使用 GitHub 官方 Runner Image | ✅ | **無需自訂 image** |
 | Spot VM 自動擴展 | ✅ | 節省 60-80% 成本 |
 
+> 📖 一個事件驅動、可縮到零的替代方案（一般 CI 與 Copilot cloud agent）正逐 repo、逐 workflow 評估中：見 [GitHub ACA Runner](../aca-runner/README_zh-tw.md)。本 AKS runner 目前仍是現行 fallback 平台，在評估期間持續運行、不做變更。
+
 ---
 
 ## 📋 目錄
@@ -472,6 +474,7 @@ src/aks-runner/
 
 ## 🔗 相關資源
 
+- [GitHub ACA Runner](../aca-runner/README_zh-tw.md) — 事件驅動、可縮到零的替代方案，目前逐 repo、逐 workflow 漸進評估中，另有專屬 [RUNBOOK](../../../docs/github/aca-runner/RUNBOOK_zh-tw.md)
 - [ARC 官方文件](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller)
 - [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks)
 - [Azure AKS 文件](https://learn.microsoft.com/en-us/azure/aks/)

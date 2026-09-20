@@ -15,6 +15,8 @@ Use Bicep to create AKS clusters on Azure and run GitHub Self-hosted Runners wit
 | 使用 GitHub 官方 Runner Image | ✅ | **無需自訂 image** |
 | Spot VM 自動擴展 | ✅ | 節省 60-80% 成本 |
 
+> 📖 A gradual, scale-to-zero alternative for general CI and Copilot cloud agent is being evaluated repo-by-repo/workflow-by-workflow: see [GitHub ACA Runner](../aca-runner/README.md). This AKS runner remains the current fallback platform and keeps running unchanged during that evaluation.
+
 ---
 
 ## 📋 目錄
@@ -472,6 +474,7 @@ src/aks-runner/
 
 ## 🔗 相關資源
 
+- [GitHub ACA Runner](../aca-runner/README.md) — event-driven, scale-to-zero alternative, currently under gradual repo-by-repo/workflow-by-workflow evaluation with its own [RUNBOOK](../../../docs/github/aca-runner/RUNBOOK.md)
 - [ARC 官方文件](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller)
 - [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks)
 - [Azure AKS 文件](https://learn.microsoft.com/en-us/azure/aks/)
