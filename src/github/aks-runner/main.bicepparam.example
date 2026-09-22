@@ -5,6 +5,14 @@
 
 using 'main.bicep'
 
+// Android Pool (原生 Android build 專用，供 arc-android runner scale set 使用)
+// 若不需要原生 Android build，可設為 false
+param enableAndroidPool = true
+param androidNodeVmSize = 'Standard_D8as_v5'
+param androidNodeMinCount = 0
+param androidNodeMaxCount = 8
+param androidNodeOsDiskSizeGb = 256
+
 // 環境設定
 param environment = 'dev'
 param projectName = 'ghrunner'

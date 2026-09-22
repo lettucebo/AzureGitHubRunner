@@ -15,14 +15,15 @@
 
 ---
 
-## 📦 四種部署選項
+## 📦 部署選項
 
 ### GitHub Actions Runners
 
 | 解決方案 | 使用情境 | 技術 | 可擴展性 | 成本 |
 |----------|----------|------------|-------------|------|
 | **[GitHub VM Runner](src/github/vm-runner/)** | 簡單專案，固定工作負載 | Terraform | 固定實例 | 💰 |
-| **[GitHub AKS Runner](src/github/aks-runner/)** | Copilot Agent，動態工作負載 | Bicep + ARC | 自動擴展 0-N | 💰💰 |
+| **[GitHub AKS Runner](src/github/aks-runner/)** | Copilot Agent，動態工作負載 —— **現行 fallback 平台，持續運行** | Bicep + ARC | 自動擴展 0-N | 💰💰 |
+| **[GitHub ACA Runner](src/github/aca-runner/)** | 一般 CI 與 Copilot cloud agent，逐 repo、逐 workflow 漸進驗證（無 Docker 需求） | Bicep + Container Apps Jobs | 自動擴展 0-N，event-driven，可縮到零 | 💰 |
 
 ### Azure DevOps Pipeline Agents
 
@@ -73,6 +74,28 @@ src/github/aks-runner/   # Bicep 基礎設施
 - ✅ 使用 GitHub 官方 Runner 映像
 
 📖 **文件**: [docs/github/aks-runner/](docs/github/aks-runner/)
+
+---
+
+## ⚡ GitHub ACA Runner (Bicep + Container Apps Jobs)
+
+事件驅動、可縮到零的替代方案，正**逐 repo、逐 workflow 漸進**導入。上方的 AKS Runner 目前仍是現行 fallback，在整個導入期間持續運行、不做變更 —— 任何 live 部署或切換前請先閱讀 runbook。
+
+```
+src/github/aca-runner/   # Bicep 基礎設施
+├── main.bicep           # 兩階段部署（先建基礎設施，再開啟 runner jobs）
+├── modules/              # ACR/Key Vault/Identity/ACA env/runner job 模組
+├── runner-image/         # ephemeral runner 的 Dockerfile 與 entrypoint
+└── scripts/              # 建置、版本釘選、部署後驗證腳本
+```
+
+### 功能特色
+- ✅ 可縮到零（`minExecutions: 0`），無閒置計算費用
+- ✅ 支援一般 CI（`aca-general`）與 GitHub Copilot cloud agent（`aca-copilot`）
+- ❌ 不支援 Docker/container jobs，本地磁碟上限 8 GiB —— 超出者需改用 GitHub-hosted runner
+- ⚠️ 任何 live 部署或 Copilot 切換前，須先完成 RUNBOOK Gate A/B 核准
+
+📖 **文件**: [src/github/aca-runner/README_zh-tw.md](src/github/aca-runner/README_zh-tw.md) · [Runbook](docs/github/aca-runner/RUNBOOK_zh-tw.md)
 
 ---
 
@@ -132,7 +155,8 @@ src/azure-devops/aks-runner/  # Bicep 基礎設施
 ├── src/
 │   ├── github/                     # GitHub Actions 解決方案
 │   │   ├── vm-runner/              # Terraform VM runner
-│   │   └── aks-runner/             # Bicep AKS runner (ARC)
+│   │   ├── aks-runner/             # Bicep AKS runner (ARC) —— 現行 fallback
+│   │   └── aca-runner/             # Bicep ACA runner (Container Apps Jobs) —— 漸進導入
 │   ├── azure-devops/               # Azure DevOps 解決方案
 │   │   ├── vm-runner/              # Terraform VM agent
 │   │   └── aks-runner/             # Bicep AKS agent (KEDA)
@@ -142,7 +166,8 @@ src/azure-devops/aks-runner/  # Bicep 基礎設施
 └── docs/
     ├── github/                     # GitHub 解決方案文件
     │   ├── vm-runner/
-    │   └── aks-runner/
+    │   ├── aks-runner/
+    │   └── aca-runner/              # RUNBOOK.md / RUNBOOK_zh-tw.md
     └── azure-devops/               # Azure DevOps 解決方案文件
         ├── vm-runner/
         └── aks-runner/
@@ -173,6 +198,18 @@ az deployment sub create --location eastasia --template-file main.bicep --parame
 ./scripts/install-arc.sh
 ```
 
+### GitHub ACA Runner (漸進導入，需先核准)
+
+> ⚠️ 此非「現在就能執行」的快速開始。Live 部署前須先完成 RUNBOOK Gate A 核准（Copilot 另需 Gate B）。完整核准流程請見 [src/github/aca-runner/README_zh-tw.md](src/github/aca-runner/README_zh-tw.md) 與 [docs/github/aca-runner/RUNBOOK_zh-tw.md](docs/github/aca-runner/RUNBOOK_zh-tw.md)。
+
+```bash
+cd src/github/aca-runner
+cp main.bicepparam.example main.bicepparam
+# 階段 A：僅部署基礎設施 (enableRunnerJobs=false)
+az deployment sub create --location eastasia --template-file main.bicep --parameters main.bicepparam
+# 寫入 PAT、建置 runner image，再進行 enableRunnerJobs=true 的階段 B
+```
+
 ### Azure DevOps VM Agent (簡單)
 
 ```bash
@@ -200,16 +237,17 @@ kubectl apply -f kubernetes/
 
 ## 📊 解決方案比較
 
-| 功能 | GitHub VM | GitHub AKS | Azure DevOps VM | Azure DevOps AKS |
-|---------|:---------:|:----------:|:---------------:|:----------------:|
-| 平台 | GitHub Actions | GitHub Actions | Azure Pipelines | Azure Pipelines |
-| 技術 | Terraform | Bicep + ARC | Terraform | Bicep + KEDA |
-| 自動擴展 | ❌ | ✅ | ❌ | ✅ |
-| 縮減至零 | ❌ | ✅ | ❌ | ✅ |
-| Copilot Agent | ❌ | ✅ | N/A | N/A |
-| Spot VM 支援 | ✅ | ✅ | ✅ | ✅ |
-| 閒置成本 | ~$29/月 | ~$60/月 | ~$29/月 | ~$40/月 |
-| 複雜度 | 簡單 | 中等 | 簡單 | 中等 |
+| 功能 | GitHub VM | GitHub AKS | GitHub ACA | Azure DevOps VM | Azure DevOps AKS |
+|---------|:---------:|:----------:|:----------:|:---------------:|:----------------:|
+| 平台 | GitHub Actions | GitHub Actions | GitHub Actions | Azure Pipelines | Azure Pipelines |
+| 技術 | Terraform | Bicep + ARC | Bicep + Container Apps Jobs | Terraform | Bicep + KEDA |
+| 自動擴展 | ❌ | ✅ | ✅（event-driven） | ❌ | ✅ |
+| 縮減至零 | ❌ | ❌（system pool 固定） | ✅ | ❌ | ✅ |
+| Copilot Agent | ❌ | ✅（現行 fallback） | ✅（漸進導入，見 RUNBOOK） | N/A | N/A |
+| Docker/container jobs | ✅ | ✅ | ❌ | ✅ | ✅ |
+| Spot VM 支援 | ✅ | ✅ | N/A | ✅ | ✅ |
+| 閒置成本 | ~$29/月 | ~$130–150/月 | ~$5–7/月 | ~$29/月 | ~$40/月 |
+| 複雜度 | 簡單 | 中等 | 中等 | 簡單 | 中等 |
 
 ---
 

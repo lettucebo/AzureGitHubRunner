@@ -1,0 +1,221 @@
+name: CI - ACA GitHub Runner
+
+# =============================================================================
+# 驗證 src/github/aca-runner 的 Bicep、Shell 腳本與 Runner image
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/github/aca-runner/**'
+      - '.github/workflows/ci-aca.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/github/aca-runner/**'
+      - '.github/workflows/ci-aca.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-bicep:
+    name: Validate Bicep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bicep
+        run: |
+          az bicep install
+          az bicep version
+
+      - name: Bicep Build
+        run: |
+          echo "🔍 Validating Bicep syntax..."
+          cd src/github/aca-runner
+          az bicep build --file main.bicep --stdout > /dev/null
+          for module in modules/*.bicep; do
+            az bicep build --file "$module" --stdout > /dev/null
+          done
+          echo "✅ Bicep syntax is valid"
+
+      - name: Bicep Lint
+        run: |
+          cd src/github/aca-runner
+          az bicep lint --file main.bicep
+          echo "✅ Bicep linting passed"
+
+      - name: Assert runner Job UAMI is not exposed to container code
+        run: |
+          # Regression guard for final-review Blocking finding: the UAMI mounted on the
+          # runner Job must stay usable by the platform (ACR image pull / Key Vault secret
+          # resolution) but must NOT be reachable from main-container code via the
+          # identity endpoint (IDENTITY_ENDPOINT), which would let runner workload code
+          # mint its own token and re-read the Key Vault GitHub PAT directly.
+          # Ref: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity#control-managed-identity-availability
+          #      https://learn.microsoft.com/en-us/azure/templates/microsoft.app/2025-01-01/jobs
+          cd src/github/aca-runner
+          runner_job_json="$(az bicep build --file modules/runnerJob.bicep --stdout)"
+
+          job_resource="$(printf '%s' "${runner_job_json}" | jq -c '.resources[] | select(.type == "Microsoft.App/jobs")')"
+          if [ -z "${job_resource}" ]; then
+            echo "❌ 找不到 Microsoft.App/jobs 資源"
+            exit 1
+          fi
+
+          identity_key="$(printf '%s' "${job_resource}" | jq -r '.identity.userAssignedIdentities | keys[0] // empty')"
+          if [ -z "${identity_key}" ]; then
+            echo "❌ runner Job 未掛載任何 user-assigned managed identity"
+            exit 1
+          fi
+
+          lifecycle="$(printf '%s' "${job_resource}" | jq -r --arg key "${identity_key}" '
+            def strip_expr:
+              if startswith("[format(\u0027{0}\u0027, ") then
+                ltrimstr("[format(\u0027{0}\u0027, ") | rtrimstr(")]")
+              elif startswith("[") then
+                ltrimstr("[") | rtrimstr("]")
+              else
+                .
+              end;
+            ($key | strip_expr) as $target
+            | (.properties.configuration.identitySettings // [])
+            | map(select((.identity | strip_expr) == $target))
+            | (.[0].lifecycle // "MISSING")
+          ')"
+
+          if [ "${lifecycle}" != "None" ]; then
+            echo "❌ 掛載的 UAMI (${identity_key}) 的 identitySettings lifecycle 必須為 None，實際為 '${lifecycle}'"
+            echo "   main container 可能透過 identity endpoint 取得該 UAMI token，重新讀取 Key Vault PAT"
+            exit 1
+          fi
+          echo "✅ runner UAMI identitySettings lifecycle = None（main container 無法使用該身分）"
+
+      - name: Validate parameter example
+        run: |
+          cd src/github/aca-runner
+          cp main.bicepparam.example validate.bicepparam
+          az bicep build-params --file validate.bicepparam --stdout > /dev/null
+          rm validate.bicepparam
+          echo "✅ Parameter example is valid"
+
+  validate-scripts:
+    name: Validate Shell Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck src/github/aca-runner/scripts/*.sh
+          shellcheck src/github/aca-runner/runner-image/*.sh
+          echo "✅ ShellCheck passed"
+
+      - name: Assert entrypoint drops the PAT before exec
+        run: |
+          entrypoint_path="src/github/aca-runner/runner-image/entrypoint.sh"
+          unset_line="$(awk '/^[[:space:]]*unset[[:space:]]+GITHUB_PAT([[:space:]]|$)/ { print NR; exit }' "${entrypoint_path}")"
+          exec_line="$(awk '/^[[:space:]]*exec[[:space:]]+\.\/run\.sh([[:space:]]|$)/ { print NR; exit }' "${entrypoint_path}")"
+
+          if [ -z "${unset_line}" ]; then
+            echo "❌ entrypoint.sh must unset GITHUB_PAT before exec"
+            exit 1
+          fi
+          if [ -z "${exec_line}" ]; then
+            echo "❌ entrypoint.sh must exec run.sh so /proc/1/environ is rebuilt clean"
+            exit 1
+          fi
+          if [ "${unset_line}" -ge "${exec_line}" ]; then
+            echo "❌ entrypoint.sh must unset GITHUB_PAT before exec ./run.sh (unset line ${unset_line}, exec line ${exec_line})"
+            exit 1
+          fi
+          echo "✅ Credential handling assertions passed (unset line ${unset_line}, exec line ${exec_line})"
+
+  validate-image:
+    name: Validate Runner Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert runner version is pinned
+        run: |
+          # shellcheck source=/dev/null
+          source src/github/aca-runner/runner-image/runner-version.env
+          if [ -z "${RUNNER_VERSION:-}" ] || [ -z "${RUNNER_SHA256:-}" ]; then
+            echo "❌ runner-version.env is incomplete"
+            exit 1
+          fi
+          if ! echo "${RUNNER_SHA256}" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "❌ RUNNER_SHA256 is not a valid sha256 digest"
+            exit 1
+          fi
+          echo "✅ Pinned to runner ${RUNNER_VERSION}"
+
+      - name: Build runner image
+        run: |
+          # shellcheck source=/dev/null
+          source src/github/aca-runner/runner-image/runner-version.env
+          docker build \
+            --build-arg "RUNNER_VERSION=${RUNNER_VERSION}" \
+            --build-arg "RUNNER_SHA256=${RUNNER_SHA256}" \
+            -t aca-github-runner:ci \
+            src/github/aca-runner/runner-image
+          echo "✅ Image built"
+
+      - name: Assert runner supports required flags
+        run: |
+          for flag in --ephemeral --no-default-labels --disableupdate; do
+            if ! grep -q -- "${flag}" src/github/aca-runner/runner-image/entrypoint.sh; then
+              echo "❌ entrypoint.sh does not pass ${flag}"
+              exit 1
+            fi
+          done
+          if ! grep -q -- 'config_args+=(--runnergroup "${RUNNER_GROUP}")' src/github/aca-runner/runner-image/entrypoint.sh; then
+            echo "❌ entrypoint.sh does not conditionally pass --runnergroup"
+            exit 1
+          fi
+          help_output="$(docker run --rm --entrypoint /bin/bash aca-github-runner:ci \
+            -c 'cd /home/runner/actions-runner && ./config.sh --help 2>&1' || true)"
+          for flag in --ephemeral --no-default-labels --runnergroup --disableupdate; do
+            if ! echo "${help_output}" | grep -q -- "${flag}"; then
+              echo "❌ config.sh does not support ${flag}"
+              exit 1
+            fi
+          done
+          echo "✅ Required runner flags are configured and supported"
+
+      - name: Assert image has no Docker daemon
+        run: |
+          if docker run --rm --entrypoint /bin/bash aca-github-runner:ci -c 'command -v dockerd'; then
+            echo "❌ Image unexpectedly contains dockerd"
+            exit 1
+          fi
+          echo "✅ No Docker daemon present"
+
+  summary:
+    name: Validation Summary
+    runs-on: ubuntu-latest
+    needs: [validate-bicep, validate-scripts, validate-image]
+    if: always()
+    steps:
+      - name: Check Results
+        run: |
+          echo "========================================"
+          echo "📋 ACA GitHub Runner - Validation Summary"
+          echo "========================================"
+          echo "Bicep:   ${{ needs.validate-bicep.result }}"
+          echo "Scripts: ${{ needs.validate-scripts.result }}"
+          echo "Image:   ${{ needs.validate-image.result }}"
+          echo "========================================"
+          if [ "${{ needs.validate-bicep.result }}" != "success" ] \
+            || [ "${{ needs.validate-scripts.result }}" != "success" ] \
+            || [ "${{ needs.validate-image.result }}" != "success" ]; then
+            echo "❌ Validation failed"
+            exit 1
+          fi
+          echo "✅ All validations passed!"

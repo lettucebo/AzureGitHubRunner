@@ -5,12 +5,13 @@
 // 
 // 架構說明：
 // - System Pool: 最小型 VM (B2s), 1 台固定, 負責 K8s 系統組件與 ARC controller
-// - Runner Pool: Spot VM (D4s_v3), 0-10 台自動擴展, 承載 GitHub runner 工作負載
+// - Runner Pool: Spot VM (D4s_v3), 0-5 台自動擴展, 承載一般 CI/CD 與 Copilot Coding Agent
+// - Android Pool: 一般 VM (D8as_v5), 0-8 台自動擴展, 承載原生 Android build (需大量磁碟)
 // 
-// 成本估算：
-// - System Pool: ~$30 USD/月 (1x B2s)
-// - Runner Pool: ~$29 USD/月/台 (Spot VM)
-// - 總計閒置時: ~$70 USD/月, 滿載時: ~$350 USD/月
+// 成本估算 (East Asia, USD, 單價由 Azure Retail Prices API 實測)：
+// - 閒置時: ~$130-150/月 (System Pool 無法縮到 0；Container Insights 目前約 15.6 GB/月)
+// - 實際費用取決於 Runner/Android Pool 的使用時數，兩者閒置時皆為 0 節點
+// - 詳細成本表請見 README.md
 // ============================================================================
 
 targetScope = 'subscription'
@@ -57,6 +58,26 @@ param runnerNodeMinCount int = 0
 @minValue(1)
 @maxValue(10)
 param runnerNodeMaxCount int = 5
+
+// Android Pool 配置
+@description('是否建立 Android Pool (原生 Android build 專用，供 arc-android runner scale set 使用)')
+param enableAndroidPool bool = true
+
+@description('Android Pool VM 大小')
+param androidNodeVmSize string = 'Standard_D8as_v5'
+
+@description('Android Pool 最小節點數')
+@minValue(0)
+param androidNodeMinCount int = 0
+
+@description('Android Pool 最大節點數')
+@minValue(1)
+@maxValue(10)
+param androidNodeMaxCount int = 8
+
+@description('Android Pool OS 磁碟大小 (GB)')
+@minValue(128)
+param androidNodeOsDiskSizeGb int = 256
 
 // 可選功能
 @description('是否啟用 Container Insights 監控')
@@ -140,6 +161,13 @@ module aks 'modules/aks.bicep' = {
     runnerNodeMinCount: runnerNodeMinCount
     runnerNodeMaxCount: runnerNodeMaxCount
     
+    // Android Pool (原生 Android build)
+    enableAndroidPool: enableAndroidPool
+    androidNodeVmSize: androidNodeVmSize
+    androidNodeMinCount: androidNodeMinCount
+    androidNodeMaxCount: androidNodeMaxCount
+    androidNodeOsDiskSizeGb: androidNodeOsDiskSizeGb
+
     // Integrations
     logAnalyticsWorkspaceId: enableMonitoring && logAnalytics != null ? logAnalytics.outputs.workspaceId : ''
     acrId: enableAcr && acr != null ? acr.outputs.acrId : ''

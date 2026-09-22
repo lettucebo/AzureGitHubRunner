@@ -15,6 +15,8 @@ Use Bicep to create AKS clusters on Azure and run GitHub Self-hosted Runners wit
 | 使用 GitHub 官方 Runner Image | ✅ | **無需自訂 image** |
 | Spot VM 自動擴展 | ✅ | 節省 60-80% 成本 |
 
+> 📖 A gradual, scale-to-zero alternative for general CI and Copilot cloud agent is being evaluated repo-by-repo/workflow-by-workflow: see [GitHub ACA Runner](../aca-runner/README.md). This AKS runner remains the current fallback platform and keeps running unchanged during that evaluation.
+
 ---
 
 ## 📋 目錄
@@ -32,21 +34,32 @@ Use Bicep to create AKS clusters on Azure and run GitHub Self-hosted Runners wit
 ## 🏗️ 架構概覽
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Azure Kubernetes Service                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────────┐    ┌────────────────────────────────┐ │
-│  │   System Pool    │    │        Runner Pool             │ │
-│  │   (B2s × 1 台)   │    │   (Spot VM D4s_v3 × 0-3 台)   │ │
-│  │                  │    │                                │ │
-│  │  • K8s 系統組件  │    │  • GitHub Runner Pods          │ │
-│  │  • ARC Controller│    │  • 使用官方 runner image       │ │
-│  │                  │    │  • 自動擴展 (0-3)              │ │
-│  └──────────────────┘    └────────────────────────────────┘ │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                      Azure Kubernetes Service                          │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  ┌──────────────────┐  ┌─────────────────────┐  ┌───────────────────┐ │
+│  │   System Pool    │  │    Runner Pool      │  │   Android Pool    │ │
+│  │   (B2s × 1 台)   │  │ (Spot D4s_v3 × 0-5) │  │ (D8as_v5 × 0-8)   │ │
+│  │                  │  │                     │  │                   │ │
+│  │  • K8s 系統組件  │  │  • 一般 CI/CD job   │  │  • 原生 Android   │ │
+│  │  • ARC Controller│  │  • Copilot agent    │  │    build (AAB)    │ │
+│  │  • 固定，不可縮 0│  │  • 官方 runner image│  │  • 256 GB 磁碟    │ │
+│  │                  │  │  • 自動擴展 (0-5)   │  │  • 非 Spot        │ │
+│  └──────────────────┘  └─────────────────────┘  └───────────────────┘ │
+│                                 ▲                         ▲            │
+└─────────────────────────────────┼─────────────────────────┼────────────┘
+                                  │                         │
+                       runs-on: arc-runner-set   runs-on: arc-android
 ```
+
+### 節點池用途
+
+| Pool | Runner 標籤 | 用途 | 優先權 |
+|------|------------|------|--------|
+| `system` | — | K8s 系統組件、ARC Controller、Listener | 一般（固定 1 台） |
+| `runner` | `arc-runner-set` | 一般 CI/CD、Copilot Coding Agent | **Spot**（省成本） |
+| `androidrel` | `arc-android` | 原生 Android build（需大量磁碟與長執行時間） | **一般**（避免被回收） |
 
 ### 關鍵設計決策
 
@@ -61,17 +74,33 @@ Use Bicep to create AKS clusters on Azure and run GitHub Self-hosted Runners wit
 
 ## 💰 成本估算
 
-### 月度成本 (East Asia 區域)
+### 月度成本 (East Asia 區域，USD)
 
-| 組件 | 規格 | 閒置時 | 滿載時 |
-|------|------|--------|--------|
-| System Pool | 1× B2s | ~$30 | ~$30 |
-| Runner Pool | Spot D4s_v3 (0-3台) | ~$0 | ~$87 |
-| Load Balancer | Standard | ~$20 | ~$20 |
-| Log Analytics | 基本 | ~$10 | ~$15 |
-| **總計** | - | **~$60** | **~$152** |
+> 以下單價由 [Azure Retail Prices API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices) 實測取得（非估算）。
 
-> 💡 使用 Spot VM 相較一般 VM 節省約 **70%** 成本
+| 組件 | 規格 | 單價 | 閒置時 | 滿載時 |
+|------|------|------|--------|--------|
+| System Pool | 1× B2s Linux（**固定，無法縮到 0**） | $0.0584/hr | ~$42 | ~$42 |
+| System Pool OS Disk | Premium SSD P10 (128 GB) | $21.68/月 | ~$22 | ~$22 |
+| Runner Pool | Spot D4s_v3 (0–5 台) | $0.05/hr | ~$0 | ~$180 |
+| Android Pool | D8as_v5 (0–8 台，**非 Spot**) | $0.48/hr | ~$0 | ~$2,765 |
+| Load Balancer + Public IP | Standard | — | ~$22 | ~$22 |
+| Log Analytics | Container Insights（目前約 15.6 GB/月） | $4.03/GB | ~$43–63 | 隨 workload 增加 |
+| **總計** | - | - | **~$130–150** | **≥$3,074–3,094** |
+
+> ⚠️ 「滿載時」為**理論上限**：假設所有節點 24/7 全時運行（每月 720 小時）。實務上 Runner/Android Pool 皆為 0–N 自動擴展，僅在有 job 時計費，實際費用遠低於此。此欄僅用於評估**成本失控的上限風險**。
+>
+> ⚠️ **閒置成本才是主要開銷**：AKS System Pool **無法縮減到 0 節點**；加上目前 Container Insights 每月約 15.6 GB 的持續 ingestion，即使完全沒有 runner job 執行，每月仍約 **$130–150**。Log Analytics 範圍取決於 billing account 的 5 GB 免費額度是否已被其他 workspace 使用。
+>
+> 💡 Runner Pool 使用 Spot VM，相較隨選價格（$0.26/hr）節省約 **80%**。
+>
+> 💡 Android Pool 刻意**不使用** Spot：原生 Android release build 執行時間長，被回收會導致整個 release 失敗。
+
+### 成本效率參考
+
+自架 runner 的成本效率取決於實際使用量。若每月實際執行時數偏低，固定的閒置成本會使**每 runner-小時的實質單價大幅上升**，此時應評估 [Azure Container Apps jobs](https://learn.microsoft.com/en-us/azure/container-apps/tutorial-ci-cd-runners-jobs)（閒置為 $0）或 GitHub-hosted runner 是否更划算。
+
+> ⚠️ 注意：Azure Container Apps **不支援 Docker-in-Docker**，且每個 replica 的 ephemeral 儲存上限為 **8 GiB**、記憶體上限 **8 GiB**。改用前必須確認工作負載符合這些限制。
 
 ---
 
@@ -445,6 +474,7 @@ src/aks-runner/
 
 ## 🔗 相關資源
 
+- [GitHub ACA Runner](../aca-runner/README.md) — event-driven, scale-to-zero alternative, currently under gradual repo-by-repo/workflow-by-workflow evaluation with its own [RUNBOOK](../../../docs/github/aca-runner/RUNBOOK.md)
 - [ARC 官方文件](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller)
 - [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks)
 - [Azure AKS 文件](https://learn.microsoft.com/en-us/azure/aks/)
